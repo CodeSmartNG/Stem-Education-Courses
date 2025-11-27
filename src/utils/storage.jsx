@@ -314,6 +314,64 @@ const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
     console.error('Error processing lesson purchase:', error);
     return false;
   }
+}; // <-- This properly closes the processLessonPurchase function
+
+// ==================== LESSON PURCHASE FUNCTION ====================
+
+export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
+  try {
+    const users = getUsers();
+    const user = users[studentId];
+    
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Initialize purchasedLessons if it doesn't exist
+    if (!user.purchasedLessons) {
+      user.purchasedLessons = [];
+    }
+
+    // Initialize paymentHistory if it doesn't exist
+    if (!user.paymentHistory) {
+      user.paymentHistory = [];
+    }
+
+    // Add lesson to purchased lessons
+    const purchaseKey = `${courseKey}_${lessonId}`;
+    if (!user.purchasedLessons.includes(purchaseKey)) {
+      user.purchasedLessons.push(purchaseKey);
+    }
+
+    // Add to payment history
+    user.paymentHistory.push({
+      paymentId: paymentData?.paymentId || `manual_${Date.now()}`,
+      amount: paymentData?.amount || 0,
+      lessonId: lessonId,
+      courseKey: courseKey,
+      gateway: paymentData?.gateway || 'manual',
+      timestamp: paymentData?.timestamp || new Date().toISOString(),
+      status: 'completed'
+    });
+
+    // Update user in storage
+    users[studentId] = user;
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+
+    // Update current user if it's the same user
+    const currentUser = getCurrentUser();
+    if (currentUser && currentUser.id === studentId) {
+      const { password, ...userWithoutPassword } = user;
+      setCurrentUser(userWithoutPassword);
+    }
+
+    console.log('✅ Lesson purchase processed:', purchaseKey);
+    return true;
+
+  } catch (error) {
+    console.error('Error purchasing lesson:', error);
+    return false;
+  }
 };
 
 
