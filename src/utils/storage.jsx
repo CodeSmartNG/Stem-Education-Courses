@@ -274,7 +274,7 @@ export const initializeStorage = () => {
     // Initialize paymentHistory if it doesn't exist
     if (!user.paymentHistory) {
       user.paymentHistory = [];
-    }
+    
 
     // Add lesson to purchased lessons
     const purchaseKey = `${courseKey}_${lessonId}`;
