@@ -255,58 +255,87 @@ export const initializeStorage = () => {
 
 
 
-// ==================== LESSON PURCHASE FUNCTION ====================
-// Add this function - it's missing from your current storage.js
-export const purchaseLesson = (studentId, courseKey, lessonId, amount) => {
+// ==================== LESSON PURCHASE FUNCTION ============
+
+
+// Payment functions
+export const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
   try {
-    const student = getStudentById(studentId);
-    if (!student) {
-      throw new Error('Student not found');
-    }
-
-    // Initialize purchased lessons array if it doesn't exist
-    if (!student.purchasedLessons) {
-      student.purchasedLessons = [];
-    }
-
-    const purchaseKey = `${courseKey}-${lessonId}`;
+    const users = getUsers();
+    const user = users[studentId];
     
-    // Check if already purchased
-    if (student.purchasedLessons.includes(purchaseKey)) {
-      throw new Error('Lesson already purchased');
+    if (!user) {
+      throw new Error('User not found');
     }
 
-    // Add to purchased lessons
-    student.purchasedLessons.push(purchaseKey);
-
-    // Record purchase transaction
-    if (!student.purchaseHistory) {
-      student.purchaseHistory = [];
+    // Initialize purchasedLessons if it doesn't exist
+    if (!user.purchasedLessons) {
+      user.purchasedLessons = [];
     }
 
-    const purchaseRecord = {
-      id: `purchase_${Date.now()}`,
-      courseKey: courseKey,
+    // Initialize paymentHistory if it doesn't exist
+    if (!user.paymentHistory) {
+      user.paymentHistory = [];
+    }
+
+    // Add lesson to purchased lessons
+    const purchaseKey = `${courseKey}_${lessonId}`;
+    if (!user.purchasedLessons.includes(purchaseKey)) {
+      user.purchasedLessons.push(purchaseKey);
+    }
+
+    // Add to payment history
+    user.paymentHistory.push({
+      paymentId: paymentData.paymentId,
+      amount: paymentData.amount,
       lessonId: lessonId,
-      amount: amount,
-      date: new Date().toISOString(),
+      courseKey: courseKey,
+      gateway: paymentData.gateway || 'paystack',
+      timestamp: paymentData.timestamp,
       status: 'completed'
-    };
+    });
 
-    student.purchaseHistory.push(purchaseRecord);
+    // Update user in storage
+    users[studentId] = user;
+    localStorage.setItem('hausaStem_users', JSON.stringify(users));
 
-    // Update student
-    updateStudent(student);
+    // Update current user if it's the same user
+    const currentUser = getCurrentUser();
+    if (currentUser && currentUser.id === studentId) {
+      const { password, ...userWithoutPassword } = user;
+      setCurrentUser(userWithoutPassword);
+    }
 
-    console.log(`✅ Student ${studentId} purchased lesson ${lessonId} in course ${courseKey} for ₦${amount}`);
+    console.log('✅ Lesson purchase processed:', purchaseKey);
     return true;
+
   } catch (error) {
-    console.error('Error purchasing lesson:', error);
-    throw error;
+    console.error('Error processing lesson purchase:', error);
+    return false;
   }
 };
 
-
+export const canAccessLesson = (studentId, courseKey, lessonId) => {
+  try {
+    const users = getUsers();
+    const user = users[studentId];
+    
+    if (!user) return false;
+    
+    // Admins and teachers have access to everything
+    if (user.role === 'admin' || user.role === 'teacher') {
+      return true;
+    }
+    
+    // Check if lesson is purchased
+    const purchaseKey = `${courseKey}_${lessonId}`;
+    return user.purchasedLessons && user.purchasedLessons.includes(purchaseKey);
+    
+  } catch (error) {
+    console.error('Error checking lesson access:', error);
+    return false;
+  }
+};
 
 
 
