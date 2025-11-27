@@ -343,13 +343,7 @@ export const canAccessLesson = (studentId, courseKey, lessonId) => {
 
 
 
-  
-  // If lesson is free, it's accessible
-  if (lesson.isFree) return true;
-  
-  // If lesson is paid, check if student purchased it
-  return hasStudentPurchasedLesson(studentId, courseKey, lessonId);
-};
+
 
 
 
