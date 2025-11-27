@@ -318,14 +318,19 @@ const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
 
 // ==================== LESSON PURCHASE FUNCTION ====================
 
+
+// ... previous function ends here
+// <-- add missing closing brace if needed
+
 export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
-    const user = users[studentId];
-    
-    if (!user) {
-      throw new Error('User not found');
-    }
+    // ... rest of function
+  } catch (error) {
+    // ... error handling
+  }
+};
+
 
     // Initialize purchasedLessons if it doesn't exist
     if (!user.purchasedLessons) {
