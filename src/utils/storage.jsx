@@ -257,11 +257,11 @@ export const initializeStorage = () => {
 
 // Payment functions
 
-export const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
+ const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
   try {
     const users = getUsers();
     const user = users[studentId];
-    
+    }
     if (!user) {
       throw new Error('User not found');
     }
