@@ -346,7 +346,7 @@ export const canAccessLesson = (studentId, courseKey, lessonId) => {
 
 // ==================== LESSON PURCHASE FUNCTION ====================
 
-export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
+ const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -415,7 +415,7 @@ export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData
 // ==================== TEACHER WALLET & PAYMENT FUNCTIONS ====================
 
 // NEW: Initialize teacher wallets
-export const initializeTeacherWallets = () => {
+ const initializeTeacherWallets = () => {
   const wallets = getTeacherWallets();
   const teachers = getAllTeachers();
   
