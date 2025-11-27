@@ -342,11 +342,7 @@ export const canAccessLesson = (studentId, courseKey, lessonId) => {
 
 
 
-// ==================== LESSON ACCESS CONTROL ====================
 
-export const canAccessLesson = (studentId, courseKey, lessonId) => {
-  const lesson = getLessonById(courseKey, lessonId);
-  if (!lesson) return false;
   
   // If lesson is free, it's accessible
   if (lesson.isFree) return true;
