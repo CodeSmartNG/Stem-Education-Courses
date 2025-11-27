@@ -255,13 +255,16 @@ export const initializeStorage = () => {
 
 
 
+
+
+
 // Payment functions
 
- const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
+const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
   try {
     const users = getUsers();
     const user = users[studentId];
-    }
+    
     if (!user) {
       throw new Error('User not found');
     }
@@ -274,7 +277,7 @@ export const initializeStorage = () => {
     // Initialize paymentHistory if it doesn't exist
     if (!user.paymentHistory) {
       user.paymentHistory = [];
-    
+    }
 
     // Add lesson to purchased lessons
     const purchaseKey = `${courseKey}_${lessonId}`;
@@ -309,28 +312,6 @@ export const initializeStorage = () => {
 
   } catch (error) {
     console.error('Error processing lesson purchase:', error);
-    return false;
-  }
-};
-
-export const canAccessLesson = (studentId, courseKey, lessonId) => {
-  try {
-    const users = getUsers();
-    const user = users[studentId];
-    
-    if (!user) return false;
-    
-    // Admins and teachers have access to everything
-    if (user.role === 'admin' || user.role === 'teacher') {
-      return true;
-    }
-    
-    // Check if lesson is purchased
-    const purchaseKey = `${courseKey}_${lessonId}`;
-    return user.purchasedLessons && user.purchasedLessons.includes(purchaseKey);
-    
-  } catch (error) {
-    console.error('Error checking lesson access:', error);
     return false;
   }
 };
