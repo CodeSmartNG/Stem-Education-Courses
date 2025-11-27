@@ -123,38 +123,7 @@ const LoginForm = ({ onLogin, onSwitchToRegister, onSwitchToTeacherRegister }) =
           </button>
         </form>
 
-        {/* Demo Login Buttons */}
-        <div className="demo-section">
-          <div className="demo-divider">
-            <span>Quick Demo Access</span>
-          </div>
-          <div className="demo-buttons">
-            <button 
-              type="button" 
-              className="demo-btn admin-demo"
-              onClick={() => handleDemoLogin('admin')}
-            >
-              <span className="demo-icon">👑</span>
-              Admin Demo
-            </button>
-            <button 
-              type="button" 
-              className="demo-btn teacher-demo"
-              onClick={() => handleDemoLogin('teacher')}
-            >
-              <span className="demo-icon">👨‍🏫</span>
-              Teacher Demo
-            </button>
-            <button 
-              type="button" 
-              className="demo-btn student-demo"
-              onClick={() => handleDemoLogin('student')}
-            >
-              <span className="demo-icon">👨‍🎓</span>
-              Student Demo
-            </button>
-          </div>
-        </div>
+        
 
         <div className="auth-footer">
           <div className="footer-section">
