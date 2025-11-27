@@ -256,11 +256,13 @@ export const initializeStorage = () => {
 
 
 
-
-
 // Payment functions
 
-const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
+
+
+// ==================== LESSON PURCHASE FUNCTION ====================
+
+export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -268,69 +270,6 @@ const processLessonPurchase = (studentId, courseKey, lessonId, paymentData) => {
     if (!user) {
       throw new Error('User not found');
     }
-
-    // Initialize purchasedLessons if it doesn't exist
-    if (!user.purchasedLessons) {
-      user.purchasedLessons = [];
-    }
-
-    // Initialize paymentHistory if it doesn't exist
-    if (!user.paymentHistory) {
-      user.paymentHistory = [];
-    }
-
-    // Add lesson to purchased lessons
-    const purchaseKey = `${courseKey}_${lessonId}`;
-    if (!user.purchasedLessons.includes(purchaseKey)) {
-      user.purchasedLessons.push(purchaseKey);
-    }
-
-    // Add to payment history
-    user.paymentHistory.push({
-      paymentId: paymentData.paymentId,
-      amount: paymentData.amount,
-      lessonId: lessonId,
-      courseKey: courseKey,
-      gateway: paymentData.gateway || 'paystack',
-      timestamp: paymentData.timestamp,
-      status: 'completed'
-    });
-
-    // Update user in storage
-    users[studentId] = user;
-    localStorage.setItem('hausaStem_users', JSON.stringify(users));
-
-    // Update current user if it's the same user
-    const currentUser = getCurrentUser();
-    if (currentUser && currentUser.id === studentId) {
-      const { password, ...userWithoutPassword } = user;
-      setCurrentUser(userWithoutPassword);
-    }
-
-    console.log('✅ Lesson purchase processed:', purchaseKey);
-    return true;
-
-  } catch (error) {
-    console.error('Error processing lesson purchase:', error);
-    return false;
-  }
-}; // <-- This properly closes the processLessonPurchase function
-
-// ==================== LESSON PURCHASE FUNCTION ====================
-
-
-// ... previous function ends here
-// <-- add missing closing brace if needed
-
-export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
-  try {
-    const users = getUsers();
-    // ... rest of function
-  } catch (error) {
-    // ... error handling
-  }
-};
-
 
     // Initialize purchasedLessons if it doesn't exist
     if (!user.purchasedLessons) {
@@ -379,6 +318,29 @@ export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData
   }
 };
 
+// ==================== LESSON ACCESS CHECK FUNCTION ====================
+
+export const canAccessLesson = (studentId, courseKey, lessonId) => {
+  try {
+    const users = getUsers();
+    const user = users[studentId];
+    
+    if (!user) return false;
+    
+    // Admins and teachers have access to everything
+    if (user.role === 'admin' || user.role === 'teacher') {
+      return true;
+    }
+    
+    // Check if lesson is purchased
+    const purchaseKey = `${courseKey}_${lessonId}`;
+    return user.purchasedLessons && user.purchasedLessons.includes(purchaseKey);
+    
+  } catch (error) {
+    console.error('Error checking lesson access:', error);
+    return false;
+  }
+};
 
 
 
