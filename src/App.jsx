@@ -21,6 +21,7 @@ import Blog from './components/Blog';
 import Resources from './components/Resources';
 import Careers from './components/Careers';
 import Support from './components/Support';
+
 import { 
   initializeStorage, 
   getStudents, 
@@ -37,7 +38,9 @@ import {
   resendEmailConfirmation,
   canAccessLesson,
   purchaseLesson,
-  getTeacherWhatsAppUrl
+  getTeacherWhatsAppUrl,
+  getCourses,     // ✅ ADD THIS
+  getLessons      // ✅ ADD THIS
 } from './utils/storage';
 
 // Safe object utility functions with detailed logging
