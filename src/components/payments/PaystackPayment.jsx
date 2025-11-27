@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Button from '../ui/Button';
 import Loader from '../ui/Loader';
-
+import './PaystackPayment.css';
 const PaystackPayment = ({ lesson, student, onSuccess, onClose, onError }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
