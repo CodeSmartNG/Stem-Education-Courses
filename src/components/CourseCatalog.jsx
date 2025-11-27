@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getCourses, getCurrentUser, canAccessLesson, purchaseLesson, getTeacherWhatsAppUrl } from '../utils/storage';
+import { getCourses, getCurrentUser, canAccessLesson, purchaseLesson, getTeacherWhatsAppUrl, getLessons } from '../utils/storage';
+
 import Quiz from './Quiz';
 import MultimediaViewer from './MultimediaViewer';
 import PaymentModal from './payments/PaymentModal';
@@ -145,42 +146,54 @@ const CourseCatalog = ({ student, setStudent }) => {
     return canAccessLesson(currentUser.id, courseKey, lessonId);
   };
 
-  // NEW: Handle lesson purchase
-  const handlePurchaseLesson = async (courseKey, lessonIndex) => {
-    try {
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        alert('Please log in to purchase lessons');
-        return;
-      }
+  
 
-      const course = courses[courseKey];
-      const lesson = course.lessons?.[lessonIndex];
-      
-      if (!lesson) {
-        console.error('Lesson not found');
-        return;
-      }
 
-      if (window.confirm(`Are you sure you want to purchase "${lesson.title}" for ₦${lesson.price}?`)) {
-        const paymentResult = await purchaseLesson(currentUser.id, courseKey, lesson.id);
-        
-        if (paymentResult) {
-          alert('✅ Payment successful! You now have access to this lesson.');
-          // Reload courses to reflect the purchase
-          loadCourses();
-          // Start the lesson
-          setSelectedCourse(courseKey);
-          setCurrentLesson(lessonIndex);
-        } else {
-          alert('❌ Payment failed. Please try again.');
-        }
-      }
-    } catch (error) {
-      console.error('Error purchasing lesson:', error);
-      alert('❌ Error processing payment: ' + error.message);
+
+
+
+// NEW: Handle lesson purchase
+const handlePurchaseLesson = async (courseKey, lessonIndex) => {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      alert('Please log in to purchase lessons');
+      return;
     }
-  };
+
+    const course = courses[courseKey];
+    const lesson = course.lessons?.[lessonIndex];
+
+    if (!lesson) {
+      console.error('Lesson not found');
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to purchase "${lesson.title}" for ₦${lesson.price}?`)) {
+      const paymentResult = await purchaseLesson(currentUser.id, courseKey, lesson.id, {
+        paymentId: `pay_${Date.now()}`,
+        amount: lesson.price || 5000,
+        gateway: 'paystack',
+        timestamp: new Date().toISOString()
+      });
+
+      if (paymentResult) {
+        alert('✅ Payment successful! You now have access to this lesson.');
+        // Reload courses to reflect the purchase
+        loadCourses();
+        // Start the lesson
+        setSelectedCourse(courseKey);
+        setCurrentLesson(lessonIndex);
+      } else {
+        alert('❌ Payment failed. Please try again.');
+      }
+    }
+  } catch (error) {
+    console.error('Error purchasing lesson:', error);
+    alert('❌ Error processing payment: ' + error.message);
+  }
+};
+
 
   // UPDATED: Handle starting a lesson with new payment system
   const handleStartLesson = (courseKey, lessonIndex) => {
