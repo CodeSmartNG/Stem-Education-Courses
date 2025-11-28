@@ -262,7 +262,7 @@ export const initializeStorage = () => {
 
 // ==================== LESSON PURCHASE FUNCTION ====================
 
- const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
+ export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
     const user = users[studentId];
