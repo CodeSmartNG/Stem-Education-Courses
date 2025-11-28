@@ -250,19 +250,11 @@ export const initializeStorage = () => {
 
   console.log('✅ Storage initialization complete');
   debugStorage(); // Show final store
-
-
-
-
-
-
-// Payment functions
-
-
+} // <-- THIS CLOSING BRACE WAS MISSING - FIXED!
 
 // ==================== LESSON PURCHASE FUNCTION ====================
 
-  const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
+export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -320,7 +312,7 @@ export const initializeStorage = () => {
 
 // ==================== LESSON ACCESS CHECK FUNCTION ====================
 
-  export const canAccessLesson = (studentId, courseKey, lessonId) => {
+export const canAccessLesson = (studentId, courseKey, lessonId) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -342,18 +334,10 @@ export const initializeStorage = () => {
   }
 };
 
-
-
-
-
-
-
-
-
-
+// ==================== TEACHER WALLET & PAYMENT FUNCTIONS ====================
 
 // NEW: Initialize teacher wallets
- export const initializeTeacherWallets = () => {
+export const initializeTeacherWallets = () => {
   const wallets = getTeacherWallets();
   const teachers = getAllTeachers();
   
@@ -374,7 +358,6 @@ export const initializeStorage = () => {
   
   saveTeacherWallets(wallets);
 };
-
 
 // NEW: Get teacher wallets
 export const getTeacherWallets = () => {
