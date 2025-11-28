@@ -320,7 +320,7 @@ export const initializeStorage = () => {
 
 // ==================== LESSON ACCESS CHECK FUNCTION ====================
 
- const canAccessLesson = (studentId, courseKey, lessonId) => {
+ export const canAccessLesson = (studentId, courseKey, lessonId) => {
   try {
     const users = getUsers();
     const user = users[studentId];
