@@ -352,19 +352,8 @@ export const initializeStorage = () => {
 
 
 
-
-
-
-
-
-
-
-
-
-// ==================== TEACHER WALLET & PAYMENT FUNCTIONS ====================
-
 // NEW: Initialize teacher wallets
- const initializeTeacherWallets = () => {
+export const initializeTeacherWallets = () => {
   const wallets = getTeacherWallets();
   const teachers = getAllTeachers();
   
@@ -385,6 +374,7 @@ export const initializeStorage = () => {
   
   saveTeacherWallets(wallets);
 };
+
 
 // NEW: Get teacher wallets
 export const getTeacherWallets = () => {
