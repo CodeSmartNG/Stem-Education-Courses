@@ -262,7 +262,7 @@ export const initializeStorage = () => {
 
 // ==================== LESSON PURCHASE FUNCTION ====================
 
- export const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
+  const purchaseLesson = async (studentId, courseKey, lessonId, paymentData = null) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -320,7 +320,7 @@ export const initializeStorage = () => {
 
 // ==================== LESSON ACCESS CHECK FUNCTION ====================
 
- export const canAccessLesson = (studentId, courseKey, lessonId) => {
+  export const canAccessLesson = (studentId, courseKey, lessonId) => {
   try {
     const users = getUsers();
     const user = users[studentId];
@@ -353,7 +353,7 @@ export const initializeStorage = () => {
 
 
 // NEW: Initialize teacher wallets
-export const initializeTeacherWallets = () => {
+ export const initializeTeacherWallets = () => {
   const wallets = getTeacherWallets();
   const teachers = getAllTeachers();
   
