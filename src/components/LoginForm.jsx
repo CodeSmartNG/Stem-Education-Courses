@@ -140,6 +140,8 @@ const LoginForm = ({ onLogin, onSwitchToRegister, onSwitchToTeacherRegister }) =
               <div className="divider">
                 <span>or</span>
               </div>
+
+
               <button 
                 type="button" 
                 className="btn-teacher teacher-register-btn"
@@ -148,6 +150,8 @@ const LoginForm = ({ onLogin, onSwitchToRegister, onSwitchToTeacherRegister }) =
                 <span className="btn-icon">👨‍🏫</span>
                 Apply as Teacher
               </button>
+
+             
             </div>
           </div>
           

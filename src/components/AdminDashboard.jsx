@@ -15,7 +15,8 @@ import {
   getTeacherWallets,
   updateTeacherWallet,
   getPaymentTransactions,
-  savePaymentTransactions
+  savePaymentTransactions,
+  saveTeacherWallets
 } from '../utils/storage';
 import './AdminDashboard.css';
 
@@ -283,24 +284,28 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
       {/* Quick Actions */}
       <div className="quick-actions">
         <button 
+          key="manage-courses"
           className="action-btn primary"
           onClick={handleManageCourses}
         >
           📚 Manage All Courses
         </button>
         <button 
+          key="review-teachers"
           className="action-btn secondary"
           onClick={() => setActiveTab('pending')}
         >
           👨‍🏫 Review Teacher Requests ({pendingTeachers.length})
         </button>
         <button 
+          key="payment-approvals"
           className="action-btn secondary"
           onClick={() => setActiveTab('payments')}
         >
           💰 Payment Approvals ({pendingWithdrawals.length})
         </button>
         <button 
+          key="view-users"
           className="action-btn secondary"
           onClick={() => setActiveTab('users')}
         >
@@ -310,28 +315,28 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* Statistics Cards */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <div key="stat-students" className="stat-card">
           <div className="stat-icon">👥</div>
           <div className="stat-info">
             <h3>{stats.totalStudents || 0}</h3>
             <p>Total Students</p>
           </div>
         </div>
-        <div className="stat-card">
+        <div key="stat-teachers" className="stat-card">
           <div className="stat-icon">👨‍🏫</div>
           <div className="stat-info">
             <h3>{approvedTeachers.length}</h3>
             <p>Approved Teachers</p>
           </div>
         </div>
-        <div className="stat-card">
+        <div key="stat-earnings" className="stat-card">
           <div className="stat-icon">💰</div>
           <div className="stat-info">
             <h3>{formatCurrency(calculatePlatformEarnings())}</h3>
             <p>Platform Earnings</p>
           </div>
         </div>
-        <div className="stat-card">
+        <div key="stat-pending" className="stat-card">
           <div className="stat-icon">⏳</div>
           <div className="stat-info">
             <h3>{pendingWithdrawals.length}</h3>
@@ -342,14 +347,14 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* Overview Tab - Show by default */}
       {activeTab === 'overview' && (
-        <div className="overview-tab">
+        <div className="overview-tab" key="overview-tab">
           <div className="overview-grid">
             {/* Top Courses Section */}
-            <div className="overview-card">
+            <div className="overview-card" key="top-courses">
               <h3>📊 Top Courses by Enrollment</h3>
               <div className="courses-list">
                 {getTopCourses().map((course, index) => (
-                  <div key={course.key} className="course-item">
+                  <div key={course.key || `course-${index}`} className="course-item">
                     <div className="course-rank">#{index + 1}</div>
                     <div className="course-info">
                       <div className="course-title">{course.title}</div>
@@ -373,10 +378,10 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             </div>
 
             {/* Recent Activity Section */}
-            <div className="overview-card">
+            <div className="overview-card" key="recent-activity">
               <h3>🔄 Recent Activity</h3>
               <div className="activity-list">
-                <div className="activity-item">
+                <div key="activity-teachers" className="activity-item">
                   <div className="activity-icon">👨‍🏫</div>
                   <div className="activity-info">
                     <div className="activity-title">Teacher Applications</div>
@@ -385,7 +390,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     </div>
                   </div>
                 </div>
-                <div className="activity-item">
+                <div key="activity-payments" className="activity-item">
                   <div className="activity-icon">💰</div>
                   <div className="activity-info">
                     <div className="activity-title">Payment Approvals</div>
@@ -394,7 +399,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     </div>
                   </div>
                 </div>
-                <div className="activity-item">
+                <div key="activity-courses" className="activity-item">
                   <div className="activity-icon">📚</div>
                   <div className="activity-info">
                     <div className="activity-title">Course Management</div>
@@ -407,22 +412,22 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             </div>
 
             {/* Quick Stats Section */}
-            <div className="overview-card">
+            <div className="overview-card" key="quick-stats">
               <h3>📈 Platform Statistics</h3>
               <div className="stats-list">
-                <div className="stat-item">
+                <div key="stat-total-lessons" className="stat-item">
                   <span className="stat-label">Total Lessons:</span>
                   <span className="stat-value">{stats.totalLessons || 0}</span>
                 </div>
-                <div className="stat-item">
+                <div key="stat-completed-lessons" className="stat-item">
                   <span className="stat-label">Completed Lessons:</span>
                   <span className="stat-value">{stats.totalCompletedLessons || 0}</span>
                 </div>
-                <div className="stat-item">
+                <div key="stat-platform-revenue" className="stat-item">
                   <span className="stat-label">Platform Revenue:</span>
                   <span className="stat-value">{formatCurrency(calculatePlatformEarnings())}</span>
                 </div>
-                <div className="stat-item">
+                <div key="stat-pending-payments" className="stat-item">
                   <span className="stat-label">Pending Payments:</span>
                   <span className="stat-value">{pendingWithdrawals.length}</span>
                 </div>
@@ -434,22 +439,22 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* NEW: Payment Approvals Tab */}
       {activeTab === 'payments' && (
-        <div className="tab-content">
+        <div className="tab-content" key="payments-tab">
           <div className="section-header">
             <h2>💰 Payment Approvals</h2>
             <p>Review and approve teacher withdrawal requests</p>
           </div>
 
           {pendingWithdrawals.length === 0 ? (
-            <div className="empty-state">
+            <div className="empty-state" key="empty-payments">
               <div className="empty-icon">✅</div>
               <h3>No Pending Payments</h3>
               <p>All withdrawal requests have been processed.</p>
             </div>
           ) : (
             <div className="payments-grid">
-              {pendingWithdrawals.map((withdrawal, index) => (
-                <div key={withdrawal.id} className="payment-card">
+              {pendingWithdrawals.map((withdrawal) => (
+                <div key={withdrawal.id || `withdrawal-${withdrawal.teacherId}-${withdrawal.date}`} className="payment-card">
                   <div className="payment-header">
                     <div className="payment-teacher">
                       <div className="teacher-avatar">
@@ -467,23 +472,23 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                   </div>
 
                   <div className="payment-details">
-                    <div className="detail-row">
+                    <div key={`bank-${withdrawal.id}`} className="detail-row">
                       <label>Bank Name:</label>
                       <span>{withdrawal.bankDetails?.bankName || 'N/A'}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`account-${withdrawal.id}`} className="detail-row">
                       <label>Account Number:</label>
                       <span>{withdrawal.bankDetails?.accountNumber || 'N/A'}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`name-${withdrawal.id}`} className="detail-row">
                       <label>Account Name:</label>
                       <span>{withdrawal.bankDetails?.accountName || 'N/A'}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`date-${withdrawal.id}`} className="detail-row">
                       <label>Request Date:</label>
                       <span>{formatDate(withdrawal.date)}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`desc-${withdrawal.id}`} className="detail-row">
                       <label>Description:</label>
                       <span>{withdrawal.description}</span>
                     </div>
@@ -511,25 +516,25 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
           )}
 
           {/* Teacher Wallet Summary */}
-          <div className="wallet-summary-section">
+          <div className="wallet-summary-section" key="wallet-summary">
             <h3>📊 Teacher Wallet Summary</h3>
             <div className="wallets-grid">
               {Object.values(teacherWallets).map(wallet => (
-                <div key={wallet.teacherId} className="wallet-summary-card">
+                <div key={wallet.teacherId || `wallet-${wallet.teacherName}`} className="wallet-summary-card">
                   <div className="wallet-header">
                     <h4>{wallet.teacherName}</h4>
                     <span className="wallet-id">ID: {wallet.teacherId}</span>
                   </div>
                   <div className="wallet-balances">
-                    <div className="balance-item">
+                    <div key={`balance-${wallet.teacherId}`} className="balance-item">
                       <span className="label">Available:</span>
                       <span className="value">{formatCurrency(wallet.balance)}</span>
                     </div>
-                    <div className="balance-item">
+                    <div key={`earnings-${wallet.teacherId}`} className="balance-item">
                       <span className="label">Total Earnings:</span>
                       <span className="value">{formatCurrency(wallet.totalEarnings)}</span>
                     </div>
-                    <div className="balance-item">
+                    <div key={`pending-${wallet.teacherId}`} className="balance-item">
                       <span className="label">Pending Withdrawals:</span>
                       <span className="value">{formatCurrency(wallet.pendingWithdrawals)}</span>
                     </div>
@@ -547,35 +552,40 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
       )}
 
       {/* Teacher Management Section */}
-      <div className="management-section">
+      <div className="management-section" key="management-section">
         <div className="section-header">
           <h2>User Management</h2>
           <div className="tab-buttons">
             <button 
+              key="tab-overview"
               className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
               onClick={() => setActiveTab('overview')}
             >
               📊 Overview
             </button>
             <button 
+              key="tab-payments"
               className={`tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
               onClick={() => setActiveTab('payments')}
             >
               💰 Payments ({pendingWithdrawals.length})
             </button>
             <button 
+              key="tab-pending"
               className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
               onClick={() => setActiveTab('pending')}
             >
               Pending Teachers ({pendingTeachers.length})
             </button>
             <button 
+              key="tab-teachers"
               className={`tab-btn ${activeTab === 'teachers' ? 'active' : ''}`}
               onClick={() => setActiveTab('teachers')}
             >
               Approved Teachers ({approvedTeachers.length})
             </button>
             <button 
+              key="tab-users"
               className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
               onClick={() => setActiveTab('users')}
             >
@@ -586,9 +596,9 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
         {/* Pending Teachers Tab */}
         {activeTab === 'pending' && (
-          <div className="tab-content">
+          <div className="tab-content" key="pending-tab">
             {pendingTeachers.length === 0 ? (
-              <div className="empty-state">
+              <div className="empty-state" key="empty-pending">
                 <div className="empty-icon">✅</div>
                 <h3>No Pending Requests</h3>
                 <p>All teacher applications have been reviewed.</p>
@@ -596,10 +606,10 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             ) : (
               <div className="users-grid">
                 {pendingTeachers.map(teacher => (
-                  <div key={teacher.id} className="user-card pending">
+                  <div key={teacher.id || teacher.email} className="user-card pending">
                     <div className="user-header">
                       <div className="user-avatar">
-                        {teacher.name.charAt(0).toUpperCase()}
+                        {teacher.name?.charAt(0).toUpperCase() || '?'}
                       </div>
                       <div className="user-info">
                         <h4>{teacher.name}</h4>
@@ -651,9 +661,9 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
         {/* Approved Teachers Tab */}
         {activeTab === 'teachers' && (
-          <div className="tab-content">
+          <div className="tab-content" key="teachers-tab">
             {approvedTeachers.length === 0 ? (
-              <div className="empty-state">
+              <div className="empty-state" key="empty-teachers">
                 <div className="empty-icon">👨‍🏫</div>
                 <h3>No Approved Teachers</h3>
                 <p>Approved teachers will appear here.</p>
@@ -661,10 +671,10 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             ) : (
               <div className="users-grid">
                 {approvedTeachers.map(teacher => (
-                  <div key={teacher.id} className="user-card approved">
+                  <div key={teacher.id || teacher.email} className="user-card approved">
                     <div className="user-header">
                       <div className="user-avatar approved">
-                        {teacher.name.charAt(0).toUpperCase()}
+                        {teacher.name?.charAt(0).toUpperCase() || '?'}
                       </div>
                       <div className="user-info">
                         <h4>{teacher.name}</h4>
@@ -715,15 +725,15 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
         {/* All Users Tab */}
         {activeTab === 'users' && (
-          <div className="tab-content">
+          <div className="tab-content" key="users-tab">
             {allUsers.length === 0 ? (
-              <div className="empty-state">
+              <div className="empty-state" key="empty-users">
                 <div className="empty-icon">👥</div>
                 <h3>No Users</h3>
                 <p>No users found in the system.</p>
               </div>
             ) : (
-              <div className="users-table-container">
+              <div className="users-table-container" key="users-table">
                 <table className="users-table">
                   <thead>
                     <tr>
@@ -736,11 +746,11 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                   </thead>
                   <tbody>
                     {allUsers.map(user => (
-                      <tr key={user.id} className="user-row">
+                      <tr key={user.id || user.email} className="user-row">
                         <td>
                           <div className="user-cell">
                             <div className="user-avatar small">
-                              {user.name.charAt(0).toUpperCase()}
+                              {user.name?.charAt(0).toUpperCase() || '?'}
                             </div>
                             <div className="user-details">
                               <div className="user-name">{user.name}</div>
@@ -764,6 +774,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                         <td>
                           <div className="table-actions">
                             <button 
+                              key={`view-${user.id}`}
                               className="btn-view"
                               onClick={() => handleViewUser(user)}
                             >
@@ -771,6 +782,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                             </button>
                             {user.id !== currentUser.id && user.role !== 'admin' && (
                               <button 
+                                key={`delete-${user.id}`}
                                 className="btn-delete"
                                 onClick={() => handleDeleteUser(user.id)}
                                 disabled={loading}
@@ -792,7 +804,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* User Details Modal */}
       {selectedUser && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" key="user-modal">
           <div className="modal-content">
             <div className="modal-header">
               <h3>User Details</h3>
@@ -800,39 +812,39 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             </div>
             <div className="modal-body">
               <div className="user-detail-section">
-                <div className="detail-row">
+                <div key={`detail-name-${selectedUser.id}`} className="detail-row">
                   <label>Name:</label>
                   <span>{selectedUser.name}</span>
                 </div>
-                <div className="detail-row">
+                <div key={`detail-email-${selectedUser.id}`} className="detail-row">
                   <label>Email:</label>
                   <span>{selectedUser.email}</span>
                 </div>
-                <div className="detail-row">
+                <div key={`detail-role-${selectedUser.id}`} className="detail-row">
                   <label>Role:</label>
                   <span>{getUserRoleBadge(selectedUser)}</span>
                 </div>
-                <div className="detail-row">
+                <div key={`detail-joined-${selectedUser.id}`} className="detail-row">
                   <label>Joined Date:</label>
                   <span>{formatDate(selectedUser.joinedDate)}</span>
                 </div>
                 {selectedUser.role === 'teacher' && (
                   <>
-                    <div className="detail-row">
+                    <div key={`detail-spec-${selectedUser.id}`} className="detail-row">
                       <label>Specialization:</label>
                       <span>{selectedUser.specialization || 'N/A'}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`detail-status-${selectedUser.id}`} className="detail-row">
                       <label>Status:</label>
                       <span>{selectedUser.isApproved ? 'Approved' : 'Pending Approval'}</span>
                     </div>
                     {selectedUser.approvedDate && (
-                      <div className="detail-row">
+                      <div key={`detail-approved-${selectedUser.id}`} className="detail-row">
                         <label>Approved Date:</label>
                         <span>{formatDate(selectedUser.approvedDate)}</span>
                       </div>
                     )}
-                    <div className="detail-row">
+                    <div key={`detail-bio-${selectedUser.id}`} className="detail-row">
                       <label>Bio:</label>
                       <span>{selectedUser.bio || 'No bio provided'}</span>
                     </div>
@@ -840,15 +852,15 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                 )}
                 {selectedUser.role === 'student' && (
                   <>
-                    <div className="detail-row">
+                    <div key={`detail-level-${selectedUser.id}`} className="detail-row">
                       <label>Level:</label>
                       <span>{selectedUser.level || 'Beginner'}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`detail-points-${selectedUser.id}`} className="detail-row">
                       <label>Points:</label>
                       <span>{selectedUser.points || 0}</span>
                     </div>
-                    <div className="detail-row">
+                    <div key={`detail-courses-${selectedUser.id}`} className="detail-row">
                       <label>Enrolled Courses:</label>
                       <span>{selectedUser.enrolledCourses?.length || 0}</span>
                     </div>
