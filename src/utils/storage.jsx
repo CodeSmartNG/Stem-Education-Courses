@@ -1708,7 +1708,20 @@ export const deleteCourse = (courseKey) => {
   return true;
 };
 
-// ==================== LESSON MANAGEMENT ====================
+// ==================== LESSON MANAGEMENT FUNCTIONS ====================
+// ADDED THIS FUNCTION TO FIX THE ERROR
+export const getLessons = (courseKey) => {
+  const courses = getCourses() || {};
+  const course = courses[courseKey];
+  
+  if (!course) {
+    console.warn(`Course "${courseKey}" not found`);
+    return [];
+  }
+  
+  return course.lessons || [];
+};
+
 export const updateLesson = (courseKey, lessonId, lessonData) => {
   const courses = getCourses() || {};
   const course = courses[courseKey];
@@ -2899,6 +2912,7 @@ export default {
   deleteCourse,
   getCourseByKey,
   // Lesson management
+  getLessons, // ADDED THIS LINE TO FIX THE ERROR
   updateLesson,
   deleteLesson,
   getLessonById,
