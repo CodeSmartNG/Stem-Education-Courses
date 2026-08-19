@@ -39,7 +39,7 @@ import {
   uploadBytesResumable
 } from 'firebase/storage';
 
-// Your Firebase configuration
+// ✅ USE HARDCODED VALUES FOR GITHUB PAGES
 const firebaseConfig = {
   apiKey: "AIzaSyCVzXMWmdSU7kmCMVhNK4J5_dRENa98PkE",
   authDomain: "stem-education-9c439.firebaseapp.com",
@@ -58,7 +58,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Export services and functions
+// Export services
 export {
   app,
   auth,
