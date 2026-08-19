@@ -1,5 +1,5 @@
 # CodeSmartNG Stem Platform 🎓
-https://animated-space-memory-v6jpqv9xrwqj3q9p-3000.app.github.dev/
+https://codesmartng.github.io/Stem-Education-Courses/
 A comprehensive STEM education platform built with React that provides interactive learning experiences for students, teaching tools for educators, and administrative capabilities for institutions.
 
 ![CodeSmartNG Stem](https://img.shields.io/badge/CodeSmartNG-Stem%20Platform-blue)
