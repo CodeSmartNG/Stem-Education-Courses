@@ -22,67 +22,24 @@ import Resources from './components/Resources';
 import Careers from './components/Careers';
 import Support from './components/Support';
 
-import { 
-  initializeStorage, 
-  getStudents, 
-  getCurrentUser, 
-  setCurrentUser, 
-  updateStudent, 
-  addStudent,
-  authenticateUser,
-  logoutUser,
-  registerTeacher,
-  getUsers,
+// Firebase imports
+import {
+  loginUser,
   registerUser,
-  confirmUserEmail,
-  resendEmailConfirmation,
+  logoutUser,
+  getCurrentUser,
+  listenToUser,
+  updateUserProfile,
+  resendVerificationEmail,
   canAccessLesson,
   purchaseLesson,
-  getTeacherWhatsAppUrl,
-  getCourses,     // ✅ ADD THIS
-  getLessons      // ✅ ADD THIS
-} from './utils/storage';
+  getTeacherWhatsAppUrl
+} from './firebase/storageService';
 
-// Safe object utility functions with detailed logging
-const safeObjectEntries = (obj, location = 'unknown') => {
-  console.log(`🔧 safeObjectEntries called from: ${location}`, obj);
-  try {
-    if (obj === null) {
-      console.log(`❌ ${location}: Object is null`);
-      return [];
-    }
-    if (obj === undefined) {
-      console.log(`❌ ${location}: Object is undefined`);
-      return [];
-    }
-    if (typeof obj !== 'object') {
-      console.log(`❌ ${location}: Not an object, type is:`, typeof obj);
-      return [];
-    }
-    const entries = Object.entries(obj);
-    console.log(`✅ ${location}: Object.entries success, count:`, entries.length);
-    return entries;
-  } catch (error) {
-    console.error(`❌ ${location}: Error in safeObjectEntries:`, error);
-    return [];
-  }
-};
-
-const safeObjectKeys = (obj, location = 'unknown') => {
-  console.log(`🔧 safeObjectKeys called from: ${location}`, obj);
-  try {
-    if (!obj || typeof obj !== 'object') {
-      console.log(`❌ ${location}: Invalid object for keys`);
-      return [];
-    }
-    const keys = Object.keys(obj);
-    console.log(`✅ ${location}: Object.keys success, count:`, keys.length);
-    return keys;
-  } catch (error) {
-    console.error(`❌ ${location}: Error in safeObjectKeys:`, error);
-    return [];
-  }
-};
+// Constants moved outside component
+const USER_ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+const INACTIVITY_WARNING_TIME = 55 * 60 * 1000;
+const INACTIVITY_LOGOUT_TIME = 60 * 60 * 1000;
 
 function App() {
   const [currentView, setCurrentView] = useState('login');
@@ -94,39 +51,63 @@ function App() {
   const [confirmationToken, setConfirmationToken] = useState('');
   const [showConfirmationInfo, setShowConfirmationInfo] = useState(false);
   const [showInactivityWarning, setShowInactivityWarning] = useState(false);
-  
+  const [isLoading, setIsLoading] = useState(true);
+  const [unsubscribeUser, setUnsubscribeUser] = useState(null);
+
   // Refs for timer management
   const logoutTimerRef = useRef(null);
   const warningTimerRef = useRef(null);
-  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
 
-  // Auto-logout handler
-  const handleAutoLogout = useCallback(() => {
-    setMessage('You have been automatically logged out due to inactivity.');
-    handleLogout();
-  }, []);
-
-  // Reset inactivity timer
-  const resetInactivityTimer = useCallback(() => {
-    // Clear existing timers
+  // Define handleLogout first so it can be used in other hooks
+  const handleLogout = useCallback(async () => {
     if (logoutTimerRef.current) {
       clearTimeout(logoutTimerRef.current);
     }
     if (warningTimerRef.current) {
       clearTimeout(warningTimerRef.current);
     }
-    
-    // Only set timers if user is logged in
+    if (unsubscribeUser) {
+      unsubscribeUser();
+      setUnsubscribeUser(null);
+    }
+
+    try {
+      await logoutUser();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+
+    setCurrentUserState(null);
+    setCurrentView('login');
+    setMessage('');
+    setShowConfirmationInfo(false);
+    setShowInactivityWarning(false);
+    localStorage.removeItem('hausaStem_currentView');
+  }, [unsubscribeUser]);
+
+  // Auto-logout handler
+  const handleAutoLogout = useCallback(() => {
+    setMessage('You have been automatically logged out due to inactivity.');
+    handleLogout();
+  }, [handleLogout]);
+
+  // Reset inactivity timer
+  const resetInactivityTimer = useCallback(() => {
+    if (logoutTimerRef.current) {
+      clearTimeout(logoutTimerRef.current);
+    }
+    if (warningTimerRef.current) {
+      clearTimeout(warningTimerRef.current);
+    }
+
     if (currentUser) {
-      // Show warning after 55 minutes (5 minutes before logout)
       warningTimerRef.current = setTimeout(() => {
         setShowInactivityWarning(true);
-      }, 55 * 60 * 1000); // 55 minutes
-      
-      // Auto logout after 60 minutes
+      }, INACTIVITY_WARNING_TIME);
+
       logoutTimerRef.current = setTimeout(() => {
         handleAutoLogout();
-      }, 60 * 60 * 1000); // 60 minutes
+      }, INACTIVITY_LOGOUT_TIME);
     }
   }, [currentUser, handleAutoLogout]);
 
@@ -140,58 +121,91 @@ function App() {
     }
   }, [currentUser, resetInactivityTimer, showInactivityWarning]);
 
-  // Initialize storage and load data
+  // Initialize Firebase and load data
   useEffect(() => {
-    const initApp = () => {
+    const initApp = async () => {
       try {
-        console.log('🔄 Initializing storage...');
-        initializeStorage();
-        
-        // Load all data from localStorage
-        const loadedStudents = getStudents();
-        const loadedCurrentUser = getCurrentUser();
-        
-        console.log('Loaded students:', loadedStudents);
-        console.log('Loaded current user:', loadedCurrentUser);
-        
-        setStudentsState(loadedStudents);
-        
-        if (loadedCurrentUser) {
-          setCurrentUserState(loadedCurrentUser);
-          // Redirect based on user role
-          if (loadedCurrentUser.role === 'admin') {
+        console.log('🔄 Initializing Firebase...');
+        setIsLoading(true);
+
+        // Get current user from Firebase
+        const user = await getCurrentUser();
+        console.log('Loaded current user:', user);
+        console.log('Loaded current user role:', user?.role);
+
+        if (user) {
+          setCurrentUserState(user);
+
+          // Set up real-time listener for user data changes
+          if (user.uid) {
+            const unsubscribe = listenToUser(user.uid, (updatedUser) => {
+              if (updatedUser) {
+                console.log('🔄 User data updated in real-time:', updatedUser);
+                setCurrentUserState(prev => ({
+                  ...prev,
+                  ...updatedUser
+                }));
+              }
+            });
+            setUnsubscribeUser(() => unsubscribe);
+          }
+
+          // Determine correct view based on role
+          const role = user.role;
+          console.log('🔍 User role detected:', role);
+
+          if (role === 'admin') {
+            console.log('👑 Setting admin view');
             setCurrentView('admin');
-          } else if (loadedCurrentUser.role === 'teacher') {
+          } else if (role === 'teacher') {
+            console.log('👨‍🏫 Setting teacher view');
             setCurrentView('teacher');
+          } else if (role === 'student') {
+            console.log('👨‍🎓 Setting student dashboard view');
+            setCurrentView('dashboard');
           } else {
+            console.warn('⚠️ Unknown role:', role);
             setCurrentView('dashboard');
           }
+        } else {
+          console.log('👤 No current user, showing login');
+          setCurrentView('login');
         }
-        
+
+        // Load students from Firebase (or keep local for backward compatibility)
+        // We'll keep the local students array for now and sync with Firebase later
+        setStudentsState([]);
+
         setIsInitialized(true);
       } catch (error) {
         console.error('Error initializing app:', error);
         setIsInitialized(true);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     initApp();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeUser) {
+        unsubscribeUser();
+      }
+    };
   }, []);
 
   // Set up activity listeners when user is logged in
   useEffect(() => {
     if (currentUser) {
-      // Add event listeners for user activity
-      events.forEach(event => {
+      USER_ACTIVITY_EVENTS.forEach(event => {
         document.addEventListener(event, handleUserActivity);
       });
-      
-      // Start the inactivity timer
+
       resetInactivityTimer();
-      
-      // Cleanup function
+
       return () => {
-        events.forEach(event => {
+        USER_ACTIVITY_EVENTS.forEach(event => {
           document.removeEventListener(event, handleUserActivity);
         });
         if (logoutTimerRef.current) {
@@ -208,248 +222,314 @@ function App() {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    const mode = urlParams.get('mode');
+
+    // Handle Firebase email verification
+    if (mode === 'verifyEmail') {
+      setMessage('Email verified successfully! You can now log in.');
+      setCurrentView('login');
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    // Handle custom email confirmation (for backward compatibility)
     if (token) {
       handleEmailConfirmation(token);
     }
   }, []);
 
-  const handleLogin = (email, password) => {
+  // Login handler with Firebase
+  const handleLogin = useCallback(async (email, password) => {
     try {
-      const user = authenticateUser(email, password);
-      if (user) {
-        const { password: _, ...userWithoutPassword } = user;
-        setCurrentUserState(userWithoutPassword);
-        setCurrentUser(userWithoutPassword);
-        
-        // Reset inactivity timer on login
-        resetInactivityTimer();
-        
-        // Redirect based on role
-        if (user.role === 'admin') {
-          setCurrentView('admin');
-        } else if (user.role === 'teacher') {
-          setCurrentView('teacher');
-        } else {
-          setCurrentView('dashboard');
-        }
-        setMessage('');
-        return true;
-      }
-      setMessage('Invalid email or password');
-      return false;
-    } catch (error) {
-      console.error('Login error:', error);
-      setMessage(error.message);
-      return false;
-    }
-  };
+      console.log('🔐 Attempting login with email:', email);
+      setIsLoading(true);
 
-  const handleStudentRegister = async (name, email, password) => {
-    try {
-      // Check if email already exists in students
-      const users = getUsers();
-      const existingUser = safeObjectEntries(users, 'student-register').find(([key, user]) => user.email === email);
-      
-      if (existingUser || students.find(s => s.email === email)) {
-        setMessage('Email already exists. Please use a different email or login.');
+      const result = await loginUser(email, password);
+      console.log('🔐 loginUser returned:', result);
+
+      if (result.success && result.user) {
+        console.log('✅ Login successful!');
+        console.log('User role:', result.user.role);
+        console.log('User email:', result.user.email);
+        console.log('Email verified:', result.user.isEmailVerified);
+
+        // Check if email is verified
+        if (!result.user.isEmailVerified) {
+          setMessage('Please verify your email before logging in. Check your inbox for the verification link.');
+          setIsLoading(false);
+          return false;
+        }
+
+        setCurrentUserState(result.user);
+
+        // Set up real-time listener for user data changes
+        if (result.user.uid) {
+          const unsubscribe = listenToUser(result.user.uid, (updatedUser) => {
+            if (updatedUser) {
+              console.log('🔄 User data updated in real-time:', updatedUser);
+              setCurrentUserState(prev => ({
+                ...prev,
+                ...updatedUser
+              }));
+            }
+          });
+          setUnsubscribeUser(() => unsubscribe);
+        }
+
+        resetInactivityTimer();
+
+        // Set view based on role
+        if (result.user.role === 'admin') {
+          console.log('👑 Navigating to admin dashboard');
+          setCurrentView('admin');
+          localStorage.setItem('hausaStem_currentView', 'admin');
+        } else if (result.user.role === 'teacher') {
+          console.log('👨‍🏫 Navigating to teacher dashboard');
+          setCurrentView('teacher');
+          localStorage.setItem('hausaStem_currentView', 'teacher');
+        } else {
+          console.log('👨‍🎓 Navigating to student dashboard');
+          setCurrentView('dashboard');
+          localStorage.setItem('hausaStem_currentView', 'dashboard');
+        }
+
+        setMessage('');
+        setIsLoading(false);
+        return true;
+      } else {
+        console.log('❌ Login failed: No user returned');
+        setMessage('Invalid email or password. Please check your credentials.');
+        setIsLoading(false);
         return false;
       }
+    } catch (error) {
+      console.error('❌ Login error:', error);
+      setMessage(error.message || 'Login failed. Please try again.');
+      setIsLoading(false);
+      return false;
+    }
+  }, [resetInactivityTimer]);
 
-      // Register user with email confirmation
-      const result = await registerUser({
+  // Student registration with Firebase
+  const handleStudentRegister = useCallback(async (name, email, password) => {
+    try {
+      setIsLoading(true);
+      console.log('📝 Registering student:', { name, email });
+
+      const result = await registerUser(email, password, {
         name,
-        email,
-        password,
         role: 'student',
-        level: 'Beginner',
-        // Initialize student-specific fields
-        completedLessons: [],
-        progress: {},
-        purchasedLessons: []
+        level: 'Beginner'
       });
 
-      // Store pending user data and token
-      setPendingUser(result.user);
-      setConfirmationToken(result.confirmationToken);
-      setShowConfirmationInfo(true);
-      setCurrentView('email-confirmation');
-      setMessage(`Confirmation email sent to ${email}. Please check your inbox.`);
-      return true;
+      if (result.success) {
+        console.log('✅ Student registered successfully!');
+        setMessage(
+          `Confirmation email sent to ${email}. Please check your inbox and verify your email before logging in.`
+        );
+        setCurrentView('login');
+        setIsLoading(false);
+        return true;
+      } else {
+        setMessage('Registration failed. Please try again.');
+        setIsLoading(false);
+        return false;
+      }
     } catch (error) {
       console.error('Registration error:', error);
       setMessage(error.message || 'Registration failed. Please try again.');
+      setIsLoading(false);
       return false;
     }
-  };
+  }, []);
 
-  const handleTeacherRegister = async (teacherData) => {
+  // Teacher registration with Firebase
+  const handleTeacherRegister = useCallback(async (teacherData) => {
     try {
-      // Check if email already exists
-      const users = getUsers();
-      const existingUser = safeObjectEntries(users, 'teacher-register').find(([key, user]) => user.email === teacherData.email);
-      
-      if (existingUser) {
-        setMessage('Email already exists. Please use a different email or login.');
-        return false;
-      }
+      setIsLoading(true);
+      console.log('📝 Registering teacher:', teacherData);
 
-      // Register teacher with email confirmation
-      const result = await registerUser({
-        ...teacherData,
+      const result = await registerUser(teacherData.email, teacherData.password, {
+        name: teacherData.name,
         role: 'teacher',
-        // Initialize teacher-specific fields
+        specialization: teacherData.specialization || 'General',
+        bio: teacherData.bio || '',
+        whatsappNumber: teacherData.whatsappNumber || '',
         isApproved: false,
         earnings: 0,
-        courses: [],
-        whatsappNumber: teacherData.whatsappNumber || ''
+        courses: []
       });
 
-      // Store pending user data and token
-      setPendingUser(result.user);
-      setConfirmationToken(result.confirmationToken);
-      setShowConfirmationInfo(true);
-      setCurrentView('email-confirmation');
-      setMessage(`Confirmation email sent to ${teacherData.email}. Please check your inbox.`);
-      return true;
+      if (result.success) {
+        console.log('✅ Teacher registered successfully!');
+        setMessage(
+          `Confirmation email sent to ${teacherData.email}. Please check your inbox and verify your email. ` +
+          `Your account will be reviewed by an admin before you can log in.`
+        );
+        setCurrentView('login');
+        setIsLoading(false);
+        return true;
+      } else {
+        setMessage('Teacher registration failed. Please try again.');
+        setIsLoading(false);
+        return false;
+      }
     } catch (error) {
       console.error('Teacher registration error:', error);
       setMessage(error.message || 'Teacher registration failed. Please try again.');
+      setIsLoading(false);
       return false;
     }
-  };
+  }, []);
 
-  const handleEmailConfirmation = async (token) => {
+  // Email confirmation handler (for backward compatibility with localStorage)
+  const handleEmailConfirmation = useCallback(async (token) => {
     try {
-      const user = await confirmUserEmail(token);
-      
-      setMessage('Email confirmed successfully! You can now log in.');
+      // In Firebase, email verification is handled by Firebase Auth
+      // This is kept for backward compatibility with the localStorage system
+      setMessage('Email verification is handled through Firebase Auth.');
       setCurrentView('login');
       setPendingUser(null);
       setConfirmationToken('');
       setShowConfirmationInfo(false);
-      
-      // Clear token from URL
       window.history.replaceState({}, document.title, window.location.pathname);
-      
       return true;
     } catch (error) {
       console.error('Email confirmation error:', error);
       setMessage(error.message || 'Email confirmation failed. Please try again.');
       return false;
     }
-  };
+  }, []);
 
-  const handleResendConfirmation = async () => {
-    if (pendingUser) {
-      try {
-        await resendEmailConfirmation(pendingUser.email);
-        setMessage('Confirmation email resent successfully! Please check your inbox.');
-      } catch (error) {
-        console.error('Resend confirmation error:', error);
-        setMessage(error.message || 'Failed to resend confirmation email. Please try again.');
-      }
-    }
-  };
-
-  const handleLogout = () => {
-    // Clear all timers
-    if (logoutTimerRef.current) {
-      clearTimeout(logoutTimerRef.current);
-    }
-    if (warningTimerRef.current) {
-      clearTimeout(warningTimerRef.current);
-    }
-    
-    logoutUser();
-    setCurrentUserState(null);
-    setCurrentUser(null);
-    setCurrentView('login');
-    setMessage('');
-    setShowConfirmationInfo(false);
-    setShowInactivityWarning(false);
-  };
-
-  // Enhanced student update
-  const updateStudentData = (updatedStudent) => {
+  // Resend confirmation email
+  const handleResendConfirmation = useCallback(async () => {
     try {
-      // Update in localStorage
-      updateStudent(updatedStudent);
-      
-      // Update in state
+      setIsLoading(true);
+      const result = await resendVerificationEmail();
+      if (result.success) {
+        setMessage('Confirmation email resent successfully! Please check your inbox.');
+      }
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Resend confirmation error:', error);
+      setMessage(error.message || 'Failed to resend confirmation email. Please try again.');
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Update student data
+  const updateStudentData = useCallback(async (updatedStudent) => {
+    try {
+      setIsLoading(true);
+
+      // Update in Firebase
+      if (currentUser?.uid) {
+        await updateUserProfile(currentUser.uid, {
+          name: updatedStudent.name,
+          level: updatedStudent.level,
+          progress: updatedStudent.progress || {},
+          completedLessons: updatedStudent.completedLessons || [],
+          points: updatedStudent.points || 0,
+          badges: updatedStudent.badges || [],
+          enrolledCourses: updatedStudent.enrolledCourses || [],
+          purchasedLessons: updatedStudent.purchasedLessons || [],
+          paymentHistory: updatedStudent.paymentHistory || []
+        });
+      }
+
+      // Update local state
       const { password, ...studentWithoutPassword } = updatedStudent;
-      setCurrentUserState(studentWithoutPassword);
-      setCurrentUser(studentWithoutPassword);
-      
-      // Update in students list
-      setStudentsState(prev => 
+      setCurrentUserState(prev => ({
+        ...prev,
+        ...studentWithoutPassword
+      }));
+
+      setStudentsState(prev =>
         prev.map(s => s.id === updatedStudent.id ? updatedStudent : s)
       );
+
+      setIsLoading(false);
     } catch (error) {
       console.error('Error updating student:', error);
+      setMessage('Failed to update profile. Please try again.');
+      setIsLoading(false);
     }
-  };
+  }, [currentUser]);
 
-  // Enhanced user update
-  const updateCurrentUser = (updatedUser) => {
+  // Update current user
+  const updateCurrentUser = useCallback(async (updatedUser) => {
     try {
-      // Update user in the users collection
-      const users = getUsers();
-      if (users[updatedUser.id]) {
-        users[updatedUser.id] = { ...users[updatedUser.id], ...updatedUser };
-        localStorage.setItem('hausaStem_users', JSON.stringify(users));
+      setIsLoading(true);
+
+      if (currentUser?.uid) {
+        await updateUserProfile(currentUser.uid, updatedUser);
       }
-      
-      // Update current user state
+
       const { password: _, ...userWithoutPassword } = updatedUser;
-      setCurrentUserState(userWithoutPassword);
-      setCurrentUser(userWithoutPassword);
+      setCurrentUserState(prev => ({
+        ...prev,
+        ...userWithoutPassword
+      }));
+
+      setIsLoading(false);
     } catch (error) {
       console.error('Error updating user:', error);
+      setMessage('Failed to update profile. Please try again.');
+      setIsLoading(false);
     }
-  };
+  }, [currentUser]);
 
-  // Handle lesson purchase from CourseCatalog
-  const handleLessonPurchase = async (courseKey, lessonId) => {
+  // Lesson purchase with Firebase
+  const handleLessonPurchase = useCallback(async (courseKey, lessonId) => {
     try {
       if (!currentUser) {
         setMessage('Please log in to purchase lessons');
         return false;
       }
 
-      const success = await purchaseLesson(currentUser.id, courseKey, lessonId);
+      setIsLoading(true);
+      const success = await purchaseLesson(currentUser.uid, courseKey, lessonId);
+
       if (success) {
-        // Refresh user data to reflect the purchase
-        const updatedUser = getCurrentUser();
+        setMessage('✅ Lesson purchased successfully!');
+        // Refresh user data
+        const updatedUser = await getCurrentUser();
         if (updatedUser) {
           setCurrentUserState(updatedUser);
-          setCurrentUser(updatedUser);
         }
-        setMessage('✅ Lesson purchased successfully!');
+        setIsLoading(false);
         return true;
       } else {
         setMessage('❌ Failed to purchase lesson. Please try again.');
+        setIsLoading(false);
         return false;
       }
     } catch (error) {
       console.error('Error purchasing lesson:', error);
       setMessage('❌ Error processing payment: ' + error.message);
+      setIsLoading(false);
       return false;
     }
-  };
+  }, [currentUser]);
 
-  // Check if user can access lesson
-  const checkLessonAccess = (courseKey, lessonId) => {
+  // Check lesson access with Firebase
+  const checkLessonAccess = useCallback(async (courseKey, lessonId) => {
     if (!currentUser) return false;
-    return canAccessLesson(currentUser.id, courseKey, lessonId);
-  };
+    try {
+      return await canAccessLesson(currentUser.uid, courseKey, lessonId);
+    } catch (error) {
+      console.error('Error checking lesson access:', error);
+      return false;
+    }
+  }, [currentUser]);
 
   // Get teacher WhatsApp URL
-  const getTeacherContactUrl = (teacherId) => {
+  const getTeacherContactUrl = useCallback((teacherId) => {
     return getTeacherWhatsAppUrl(teacherId);
-  };
+  }, []);
 
   // Inactivity Warning Modal Component
-  const InactivityWarning = () => {
+  const InactivityWarning = useCallback(() => {
     if (!showInactivityWarning) return null;
 
     return (
@@ -463,7 +543,7 @@ function App() {
             <p>Would you like to continue your session?</p>
           </div>
           <div className="warning-actions">
-            <button 
+            <button
               className="continue-btn"
               onClick={() => {
                 resetInactivityTimer();
@@ -472,7 +552,7 @@ function App() {
             >
               Continue Session
             </button>
-            <button 
+            <button
               className="logout-btn"
               onClick={handleLogout}
             >
@@ -482,48 +562,57 @@ function App() {
         </div>
       </div>
     );
-  };
+  }, [showInactivityWarning, resetInactivityTimer, handleLogout]);
 
-  // Demo confirmation info display
-  const ConfirmationInfoDisplay = () => showConfirmationInfo && confirmationToken ? (
-    <div className="confirmation-demo-display">
-      <h3>📧 Demo Email Confirmation</h3>
-      <p>Since this is a demo, here's your confirmation token:</p>
-      <div className="confirmation-token">{confirmationToken}</div>
-      <p>You can:</p>
-      <ul>
-        <li>Click the confirmation button below to simulate email confirmation</li>
-        <li>Or manually navigate to: {window.location.origin}/confirm-email?token={confirmationToken}</li>
-      </ul>
-      <div className="demo-buttons">
-        <button 
-          onClick={() => handleEmailConfirmation(confirmationToken)}
-          className="confirm-email-btn"
-        >
-          Confirm Email Now
-        </button>
-        <button 
-          onClick={() => setShowConfirmationInfo(false)}
-          className="close-info-btn"
-        >
-          Close
-        </button>
+  // Demo confirmation info display (kept for backward compatibility)
+  const ConfirmationInfoDisplay = useCallback(() => {
+    if (!showConfirmationInfo || !confirmationToken) return null;
+
+    return (
+      <div className="confirmation-demo-display">
+        <h3>📧 Demo Email Confirmation</h3>
+        <p>Since this is a demo, here's your confirmation token:</p>
+        <div className="confirmation-token">{confirmationToken}</div>
+        <p>You can:</p>
+        <ul>
+          <li>Click the confirmation button below to simulate email confirmation</li>
+          <li>Or manually navigate to: {window.location.origin}/confirm-email?token={confirmationToken}</li>
+        </ul>
+        <div className="demo-buttons">
+          <button
+            onClick={() => handleEmailConfirmation(confirmationToken)}
+            className="confirm-email-btn"
+          >
+            Confirm Email Now
+          </button>
+          <button
+            onClick={() => setShowConfirmationInfo(false)}
+            className="close-info-btn"
+          >
+            Close
+          </button>
+        </div>
       </div>
-    </div>
-  ) : null;
+    );
+  }, [showConfirmationInfo, confirmationToken, handleEmailConfirmation]);
 
-  // Render view based on current view and user role
-  const renderView = () => {
-    console.log('🎯 renderView called with currentView:', currentView);
-    console.log('🎯 currentUser:', currentUser);
+  const MessageDisplay = useCallback(() => {
+    if (!message) return null;
 
-    // Show message if exists
-    const MessageDisplay = () => message ? (
+    return (
       <div className={`message ${message.includes('success') ? 'success' : message.includes('email') ? 'info' : 'error'}`}>
         {message}
       </div>
-    ) : null;
+    );
+  }, [message]);
 
+  // Render view based on current view and user role
+  const renderView = useCallback(() => {
+    console.log('🎯 renderView called with currentView:', currentView);
+    console.log('🎯 currentUser:', currentUser);
+    console.log('🎯 currentUser role:', currentUser?.role);
+
+    // If no user, show login/register views
     if (!currentUser) {
       console.log('👤 No current user, showing login/register views');
       switch(currentView) {
@@ -532,12 +621,13 @@ function App() {
             <>
               <MessageDisplay />
               <ConfirmationInfoDisplay />
-              <RegisterForm 
-                onRegister={handleStudentRegister} 
+              <RegisterForm
+                onRegister={handleStudentRegister}
                 onSwitchToLogin={() => {
                   setMessage('');
                   setCurrentView('login');
-                }} 
+                }}
+                isRegistering={isLoading}
               />
             </>
           );
@@ -546,8 +636,8 @@ function App() {
             <>
               <MessageDisplay />
               <ConfirmationInfoDisplay />
-              <TeacherRegisterForm 
-                onRegister={handleTeacherRegister} 
+              <TeacherRegisterForm
+                onRegister={handleTeacherRegister}
                 onSwitchToLogin={() => {
                   setMessage('');
                   setCurrentView('login');
@@ -564,7 +654,7 @@ function App() {
             <>
               <MessageDisplay />
               <ConfirmationInfoDisplay />
-              <EmailConfirmation 
+              <EmailConfirmation
                 email={pendingUser?.email}
                 onConfirm={handleEmailConfirmation}
                 onResend={handleResendConfirmation}
@@ -584,28 +674,44 @@ function App() {
             <div className="login-container">
               <MessageDisplay />
               <ConfirmationInfoDisplay />
-              <LoginForm 
-                onLogin={handleLogin} 
+              <LoginForm
+                onLogin={handleLogin}
                 onSwitchToRegister={() => {
                   setMessage('');
                   setCurrentView('register');
-                }} 
+                }}
                 onSwitchToTeacherRegister={() => {
                   setMessage('');
                   setCurrentView('teacher-register');
                 }}
+                isLoading={isLoading}
               />
             </div>
           );
       }
     }
 
-    // Role-based access control
-    console.log('🎯 Setting up role-based access control');
-    const isAdmin = currentUser?.role === 'admin';
-    const isTeacher = currentUser?.role === 'teacher';
-    const isStudent = currentUser?.role === 'student';
+    // Get role with proper fallback
+    const userRole = currentUser?.role || 'student';
+    const isAdmin = userRole === 'admin';
+    const isTeacher = userRole === 'teacher';
+    const isStudent = userRole === 'student';
+
     console.log('🎯 User roles - Admin:', isAdmin, 'Teacher:', isTeacher, 'Student:', isStudent);
+    console.log('🎯 Current view:', currentView);
+
+    // Check if currentView matches user role, if not, redirect
+    if (isAdmin && currentView !== 'admin' && currentView !== 'admin-courses') {
+      console.log('👑 Admin user, ensuring admin view');
+      setCurrentView('admin');
+      return null;
+    }
+
+    if (isTeacher && currentView !== 'teacher' && currentView !== 'profile') {
+      console.log('👨‍🏫 Teacher user, ensuring teacher view');
+      setCurrentView('teacher');
+      return null;
+    }
 
     // Handle general navigation views (accessible to all logged-in users)
     console.log('🎯 Checking general navigation views for:', currentView);
@@ -622,8 +728,8 @@ function App() {
         return <Resources />;
       case 'careers':
         return (
-          <Careers 
-            setCurrentView={setCurrentView} 
+          <Careers
+            setCurrentView={setCurrentView}
             setMessage={setMessage}
             onTeacherRegister={handleTeacherRegister}
             currentUser={currentUser}
@@ -639,7 +745,7 @@ function App() {
             <div className="access-denied">
               <h2>Access Denied</h2>
               <p>You don't have permission to access course management.</p>
-              <button 
+              <button
                 className="back-button"
                 onClick={() => setCurrentView(isAdmin ? 'admin' : isTeacher ? 'teacher' : 'dashboard')}
               >
@@ -653,49 +759,31 @@ function App() {
         break;
     }
 
-    // Handle admin dashboard
-    if (currentView === 'admin') {
+    // Admin dashboard - explicit check
+    if (isAdmin) {
       console.log('🎯 Rendering admin dashboard');
-      if (isAdmin) {
+      if (currentView === 'admin') {
         return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
-      } else {
-        return (
-          <div className="access-denied">
-            <h2>Access Denied</h2>
-            <p>You don't have permission to access the admin dashboard.</p>
-            <button 
-              className="back-button"
-              onClick={() => setCurrentView(isTeacher ? 'teacher' : 'dashboard')}
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        );
+      } else if (currentView === 'dashboard' || currentView === 'profile') {
+        console.log('🔄 Redirecting admin to admin dashboard');
+        setTimeout(() => setCurrentView('admin'), 0);
+        return null;
       }
     }
 
-    // Handle teacher dashboard
-    if (currentView === 'teacher') {
+    // Teacher dashboard
+    if (isTeacher) {
       console.log('🎯 Rendering teacher dashboard');
-      if (isTeacher) {
+      if (currentView === 'teacher') {
         return <TeacherDashboard currentUser={currentUser} setCurrentUser={updateCurrentUser} />;
-      } else {
-        return (
-          <div className="access-denied">
-            <h2>Access Denied</h2>
-            <p>You don't have permission to access the teacher dashboard.</p>
-            <button 
-              className="back-button"
-              onClick={() => setCurrentView(isAdmin ? 'admin' : 'dashboard')}
-            >
-              Back to Dashboard
-            </button>
-          </div>
-        );
+      } else if (currentView === 'dashboard' || currentView === 'profile') {
+        console.log('🔄 Redirecting teacher to teacher dashboard');
+        setTimeout(() => setCurrentView('teacher'), 0);
+        return null;
       }
     }
 
-    // Student-specific views
+    // Student views
     if (isStudent) {
       console.log('🎯 Rendering student views for:', currentView);
       switch(currentView) {
@@ -703,8 +791,8 @@ function App() {
           return <StudentProfile student={currentUser} setStudent={updateStudentData} />;
         case 'courses':
           return (
-            <CourseCatalog 
-              student={currentUser} 
+            <CourseCatalog
+              student={currentUser}
               setStudent={updateStudentData}
               onLessonPurchase={handleLessonPurchase}
               onCheckLessonAccess={checkLessonAccess}
@@ -724,79 +812,61 @@ function App() {
       }
     }
 
-    // Teacher-specific views
-    if (isTeacher) {
-      console.log('🎯 Rendering teacher views for:', currentView);
-      switch(currentView) {
-        case 'profile':
-          return (
-            <div className="teacher-profile">
-              <h2>Teacher Profile</h2>
-              <p>Name: {currentUser.name}</p>
-              <p>Email: {currentUser.email}</p>
-              <p>Specialization: {currentUser.specialization}</p>
-              <p>WhatsApp: {currentUser.whatsappNumber || 'Not provided'}</p>
-              <p>Status: {currentUser.isApproved ? 'Approved' : 'Pending Approval'}</p>
-              <p>Earnings: ₦{currentUser.earnings || 0}</p>
-              <button 
-                className="back-button"
-                onClick={() => setCurrentView('teacher')}
-              >
-                Back to Teacher Dashboard
-              </button>
-            </div>
-          );
-        case 'dashboard':
-        default:
-          return <TeacherDashboard currentUser={currentUser} setCurrentUser={updateCurrentUser} />;
-      }
-    }
-
-    // Admin-specific views
+    // Default fallback - if no view matched, show appropriate dashboard
+    console.warn('⚠️ No specific view matched, showing default dashboard');
     if (isAdmin) {
-      console.log('🎯 Rendering admin views for:', currentView);
-      switch(currentView) {
-        case 'dashboard':
-        default:
-          return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
-      }
+      return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
+    } else if (isTeacher) {
+      return <TeacherDashboard currentUser={currentUser} setCurrentUser={updateCurrentUser} />;
+    } else {
+      return (
+        <>
+          <MessageDisplay />
+          <Dashboard student={currentUser} setStudent={updateStudentData} />
+        </>
+      );
     }
+  }, [
+    currentUser,
+    currentView,
+    handleLogin,
+    handleStudentRegister,
+    handleTeacherRegister,
+    handleEmailConfirmation,
+    handleResendConfirmation,
+    handleLogout,
+    updateStudentData,
+    updateCurrentUser,
+    handleLessonPurchase,
+    checkLessonAccess,
+    getTeacherContactUrl,
+    MessageDisplay,
+    ConfirmationInfoDisplay,
+    pendingUser,
+    isLoading
+  ]);
 
-    // Default fallback for any unexpected state
-    console.error('❌ No matching view found for:', currentView, 'with user:', currentUser);
-    return (
-      <div className="error-view">
-        <h2>Something went wrong</h2>
-        <p>Unable to determine the appropriate view for your account.</p>
-        <button 
-          className="back-button"
-          onClick={handleLogout}
-        >
-          Return to Login
-        </button>
-      </div>
-    );
-  };
-
-  if (!isInitialized) {
+  if (!isInitialized || isLoading) {
     return (
       <div className="loading-screen">
         <div className="loading-spinner"></div>
-        <p>Loading STEM Platform...</p>
+        <p>{isLoading ? 'Loading...' : 'Loading STEM Platform...'}</p>
       </div>
     );
   }
 
   console.log('🎯 Rendering main App component');
+  console.log('🎯 Current user:', currentUser);
+  console.log('🎯 Current view:', currentView);
+
   return (
     <div className="App">
-      {/* Inactivity Warning Modal */}
       <InactivityWarning />
-      
+
       {currentUser && (
-        <Navigation 
-          currentView={currentView} 
-          setCurrentView={setCurrentView} 
+        <Navigation
+          currentView={currentView}
+          setCurrentView={setCurrentView}
           currentUser={currentUser}
           onLogout={handleLogout}
           isAdmin={currentUser.role === 'admin'}
