@@ -36,7 +36,7 @@ import {
   getTeacherWhatsAppUrl
 } from './firebase/storageService';
 
-// Constants moved outside component
+// Constants
 const USER_ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
 const INACTIVITY_WARNING_TIME = 55 * 60 * 1000;
 const INACTIVITY_LOGOUT_TIME = 60 * 60 * 1000;
@@ -53,12 +53,13 @@ function App() {
   const [showInactivityWarning, setShowInactivityWarning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [unsubscribeUser, setUnsubscribeUser] = useState(null);
+  const [error, setError] = useState(null);
 
   // Refs for timer management
   const logoutTimerRef = useRef(null);
   const warningTimerRef = useRef(null);
 
-  // Define handleLogout first so it can be used in other hooks
+  // Define handleLogout first
   const handleLogout = useCallback(async () => {
     if (logoutTimerRef.current) {
       clearTimeout(logoutTimerRef.current);
@@ -126,12 +127,20 @@ function App() {
     const initApp = async () => {
       try {
         console.log('🔄 Initializing Firebase...');
+        console.log('🔍 Environment:', import.meta.env.MODE);
+        console.log('🔍 Firebase Config:', {
+          apiKey: import.meta.env.VITE_FIREBASE_API_KEY ? '✅ Set' : '❌ Missing',
+          authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? '✅ Set' : '❌ Missing',
+          projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ? '✅ Set' : '❌ Missing',
+        });
+        
         setIsLoading(true);
+        setError(null);
 
         // Get current user from Firebase
         const user = await getCurrentUser();
-        console.log('Loaded current user:', user);
-        console.log('Loaded current user role:', user?.role);
+        console.log('✅ Loaded current user:', user);
+        console.log('✅ Loaded current user role:', user?.role);
 
         if (user) {
           setCurrentUserState(user);
@@ -172,13 +181,11 @@ function App() {
           setCurrentView('login');
         }
 
-        // Load students from Firebase (or keep local for backward compatibility)
-        // We'll keep the local students array for now and sync with Firebase later
         setStudentsState([]);
-
         setIsInitialized(true);
       } catch (error) {
-        console.error('Error initializing app:', error);
+        console.error('❌ Error initializing app:', error);
+        setError(error.message || 'Failed to initialize app');
         setIsInitialized(true);
       } finally {
         setIsLoading(false);
@@ -218,13 +225,12 @@ function App() {
     }
   }, [currentUser, handleUserActivity, resetInactivityTimer]);
 
-  // Check for confirmation token in URL (for email confirmation links)
+  // Check for confirmation token in URL
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     const mode = urlParams.get('mode');
 
-    // Handle Firebase email verification
     if (mode === 'verifyEmail') {
       setMessage('Email verified successfully! You can now log in.');
       setCurrentView('login');
@@ -232,7 +238,6 @@ function App() {
       return;
     }
 
-    // Handle custom email confirmation (for backward compatibility)
     if (token) {
       handleEmailConfirmation(token);
     }
@@ -243,6 +248,7 @@ function App() {
     try {
       console.log('🔐 Attempting login with email:', email);
       setIsLoading(true);
+      setError(null);
 
       const result = await loginUser(email, password);
       console.log('🔐 loginUser returned:', result);
@@ -253,16 +259,14 @@ function App() {
         console.log('User email:', result.user.email);
         console.log('Email verified:', result.user.isEmailVerified);
 
-        // Check if email is verified
         if (!result.user.isEmailVerified) {
-          setMessage('Please verify your email before logging in. Check your inbox for the verification link.');
+          setMessage('⚠️ Please verify your email before logging in. Check your inbox for the verification link.');
           setIsLoading(false);
           return false;
         }
 
         setCurrentUserState(result.user);
 
-        // Set up real-time listener for user data changes
         if (result.user.uid) {
           const unsubscribe = listenToUser(result.user.uid, (updatedUser) => {
             if (updatedUser) {
@@ -278,7 +282,6 @@ function App() {
 
         resetInactivityTimer();
 
-        // Set view based on role
         if (result.user.role === 'admin') {
           console.log('👑 Navigating to admin dashboard');
           setCurrentView('admin');
@@ -304,7 +307,21 @@ function App() {
       }
     } catch (error) {
       console.error('❌ Login error:', error);
-      setMessage(error.message || 'Login failed. Please try again.');
+      
+      if (error.message.includes('verify your email')) {
+        setMessage('⚠️ Please verify your email before logging in. Check your inbox for the verification link.');
+      } else if (error.code === 'auth/invalid-credential') {
+        setMessage('Invalid email or password. Please check your credentials.');
+      } else if (error.code === 'auth/user-not-found') {
+        setMessage('No account found with this email. Please register first.');
+      } else if (error.code === 'auth/wrong-password') {
+        setMessage('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/too-many-requests') {
+        setMessage('Too many failed attempts. Please try again later.');
+      } else {
+        setMessage(error.message || 'Login failed. Please try again.');
+      }
+      
       setIsLoading(false);
       return false;
     }
@@ -314,6 +331,7 @@ function App() {
   const handleStudentRegister = useCallback(async (name, email, password) => {
     try {
       setIsLoading(true);
+      setError(null);
       console.log('📝 Registering student:', { name, email });
 
       const result = await registerUser(email, password, {
@@ -347,6 +365,7 @@ function App() {
   const handleTeacherRegister = useCallback(async (teacherData) => {
     try {
       setIsLoading(true);
+      setError(null);
       console.log('📝 Registering teacher:', teacherData);
 
       const result = await registerUser(teacherData.email, teacherData.password, {
@@ -382,11 +401,9 @@ function App() {
     }
   }, []);
 
-  // Email confirmation handler (for backward compatibility with localStorage)
+  // Email confirmation handler
   const handleEmailConfirmation = useCallback(async (token) => {
     try {
-      // In Firebase, email verification is handled by Firebase Auth
-      // This is kept for backward compatibility with the localStorage system
       setMessage('Email verification is handled through Firebase Auth.');
       setCurrentView('login');
       setPendingUser(null);
@@ -422,7 +439,6 @@ function App() {
     try {
       setIsLoading(true);
 
-      // Update in Firebase
       if (currentUser?.uid) {
         await updateUserProfile(currentUser.uid, {
           name: updatedStudent.name,
@@ -437,7 +453,6 @@ function App() {
         });
       }
 
-      // Update local state
       const { password, ...studentWithoutPassword } = updatedStudent;
       setCurrentUserState(prev => ({
         ...prev,
@@ -492,7 +507,6 @@ function App() {
 
       if (success) {
         setMessage('✅ Lesson purchased successfully!');
-        // Refresh user data
         const updatedUser = await getCurrentUser();
         if (updatedUser) {
           setCurrentUserState(updatedUser);
@@ -564,7 +578,7 @@ function App() {
     );
   }, [showInactivityWarning, resetInactivityTimer, handleLogout]);
 
-  // Demo confirmation info display (kept for backward compatibility)
+  // Demo confirmation info display
   const ConfirmationInfoDisplay = useCallback(() => {
     if (!showConfirmationInfo || !confirmationToken) return null;
 
@@ -606,13 +620,23 @@ function App() {
     );
   }, [message]);
 
+  const ErrorDisplay = useCallback(() => {
+    if (!error) return null;
+    return (
+      <div className="error-display">
+        <h3>⚠️ Error</h3>
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }, [error]);
+
   // Render view based on current view and user role
   const renderView = useCallback(() => {
     console.log('🎯 renderView called with currentView:', currentView);
     console.log('🎯 currentUser:', currentUser);
     console.log('🎯 currentUser role:', currentUser?.role);
 
-    // If no user, show login/register views
     if (!currentUser) {
       console.log('👤 No current user, showing login/register views');
       switch(currentView) {
@@ -691,7 +715,6 @@ function App() {
       }
     }
 
-    // Get role with proper fallback
     const userRole = currentUser?.role || 'student';
     const isAdmin = userRole === 'admin';
     const isTeacher = userRole === 'teacher';
@@ -700,7 +723,6 @@ function App() {
     console.log('🎯 User roles - Admin:', isAdmin, 'Teacher:', isTeacher, 'Student:', isStudent);
     console.log('🎯 Current view:', currentView);
 
-    // Check if currentView matches user role, if not, redirect
     if (isAdmin && currentView !== 'admin' && currentView !== 'admin-courses') {
       console.log('👑 Admin user, ensuring admin view');
       setCurrentView('admin');
@@ -713,8 +735,6 @@ function App() {
       return null;
     }
 
-    // Handle general navigation views (accessible to all logged-in users)
-    console.log('🎯 Checking general navigation views for:', currentView);
     switch(currentView) {
       case 'about':
         return <About />;
@@ -755,35 +775,19 @@ function App() {
           );
         }
       default:
-        console.log('🎯 No match in general navigation, continuing to role-specific views');
         break;
     }
 
-    // Admin dashboard - explicit check
-    if (isAdmin) {
+    if (isAdmin && currentView === 'admin') {
       console.log('🎯 Rendering admin dashboard');
-      if (currentView === 'admin') {
-        return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
-      } else if (currentView === 'dashboard' || currentView === 'profile') {
-        console.log('🔄 Redirecting admin to admin dashboard');
-        setTimeout(() => setCurrentView('admin'), 0);
-        return null;
-      }
+      return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
     }
 
-    // Teacher dashboard
-    if (isTeacher) {
+    if (isTeacher && currentView === 'teacher') {
       console.log('🎯 Rendering teacher dashboard');
-      if (currentView === 'teacher') {
-        return <TeacherDashboard currentUser={currentUser} setCurrentUser={updateCurrentUser} />;
-      } else if (currentView === 'dashboard' || currentView === 'profile') {
-        console.log('🔄 Redirecting teacher to teacher dashboard');
-        setTimeout(() => setCurrentView('teacher'), 0);
-        return null;
-      }
+      return <TeacherDashboard currentUser={currentUser} setCurrentUser={updateCurrentUser} />;
     }
 
-    // Student views
     if (isStudent) {
       console.log('🎯 Rendering student views for:', currentView);
       switch(currentView) {
@@ -812,7 +816,6 @@ function App() {
       }
     }
 
-    // Default fallback - if no view matched, show appropriate dashboard
     console.warn('⚠️ No specific view matched, showing default dashboard');
     if (isAdmin) {
       return <AdminDashboard currentUser={currentUser} setCurrentView={setCurrentView} />;
@@ -846,11 +849,26 @@ function App() {
     isLoading
   ]);
 
+  // ✅ FIX: Show error if there is one
+  if (error) {
+    return (
+      <div className="loading-screen">
+        <ErrorDisplay />
+      </div>
+    );
+  }
+
   if (!isInitialized || isLoading) {
     return (
       <div className="loading-screen">
         <div className="loading-spinner"></div>
         <p>{isLoading ? 'Loading...' : 'Loading STEM Platform...'}</p>
+        {error && (
+          <div className="loading-error">
+            <p>Error: {error}</p>
+            <button onClick={() => window.location.reload()}>Retry</button>
+          </div>
+        )}
       </div>
     );
   }
