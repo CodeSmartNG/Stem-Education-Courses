@@ -5,9 +5,7 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/', // ✅ For custom domain or root
-  // OR if using username.github.io/repo-name
-  // base: '/repo-name/',
+  base: '/', // For custom domain
   server: {
     port: 3000,
     open: true
@@ -18,7 +16,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom', 'firebase']
+          vendor: ['react', 'react-dom', 'firebase'],
+          ui: ['framer-motion', 'react-hot-toast', 'react-hook-form'],
+          charts: ['recharts']
         }
       }
     }
