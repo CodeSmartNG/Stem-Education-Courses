@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { checkCertificateEligibility, generateCertificate } from '../utils/storage';
+import { checkCertificateEligibility, generateCertificate } from '../firebase/storageService';
 import Certificate from './Certificate';
 import './CertificateAward.css';
 
@@ -7,28 +7,45 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
   const [showCertificate, setShowCertificate] = useState(false);
   const [certificate, setCertificate] = useState(null);
   const [eligibility, setEligibility] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   React.useEffect(() => {
-    const checkEligibility = () => {
-      const result = checkCertificateEligibility(student.id, courseKey);
-      setEligibility(result);
-      
-      // If already has certificate, show it
-      if (result.certificate) {
-        setCertificate(result.certificate);
+    const checkEligibility = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await checkCertificateEligibility(student.uid || student.id, courseKey);
+        setEligibility(result);
+        
+        // If already has certificate, show it
+        if (result.certificate) {
+          setCertificate(result.certificate);
+        }
+      } catch (error) {
+        console.error('Error checking eligibility:', error);
+        setError('Failed to check certificate eligibility. Please try again.');
+      } finally {
+        setLoading(false);
       }
     };
     
-    checkEligibility();
-  }, [student.id, courseKey]);
+    if (student && courseKey) {
+      checkEligibility();
+    }
+  }, [student, courseKey]);
 
-  const handleGenerateCertificate = () => {
+  const handleGenerateCertificate = async () => {
     try {
-      const newCertificate = generateCertificate(student.id, courseKey);
+      setLoading(true);
+      const newCertificate = await generateCertificate(student.uid || student.id, courseKey);
       setCertificate(newCertificate);
       setShowCertificate(true);
     } catch (error) {
+      console.error('Error generating certificate:', error);
       alert('Error generating certificate: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,13 +53,59 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
     setShowCertificate(true);
   };
 
+  const handleDownload = () => {
+    // In a real implementation, this would download the certificate as PDF
+    // For now, we'll just log it
+    console.log('Certificate downloaded:', certificate);
+    
+    // You could add a PDF generation library like jspdf or html2canvas
+    // Example: window.print() or generate PDF
+    alert('Download feature will be available soon!');
+  };
+
   if (showCertificate && certificate) {
     return (
       <Certificate 
         certificate={certificate} 
         onClose={() => setShowCertificate(false)}
-        onDownload={() => console.log('Certificate downloaded')}
+        onDownload={handleDownload}
       />
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="certificate-award">
+        <div className="award-header">
+          <h2>🎓 Course Completion Certificate</h2>
+          <button onClick={onClose} className="close-btn">×</button>
+        </div>
+        <div className="loading-certificate">
+          <div className="loading-spinner"></div>
+          <p>Checking certificate eligibility...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="certificate-award">
+        <div className="award-header">
+          <h2>🎓 Course Completion Certificate</h2>
+          <button onClick={onClose} className="close-btn">×</button>
+        </div>
+        <div className="award-content">
+          <div className="error-message">
+            <div className="error-icon">⚠️</div>
+            <h3>Error</h3>
+            <p>{error}</p>
+            <button onClick={() => window.location.reload()} className="retry-btn">
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -65,15 +128,16 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
                 </div>
                 
                 <div className="course-info">
-                  <h4>{eligibility.courseTitle}</h4>
+                  <h4>{eligibility.courseTitle || 'Course'}</h4>
                   <p>Progress: 100% completed</p>
                 </div>
                 
                 <button 
                   onClick={handleGenerateCertificate}
                   className="generate-cert-btn"
+                  disabled={loading}
                 >
-                  🏆 Generate Certificate
+                  {loading ? 'Generating...' : '🏆 Generate Certificate'}
                 </button>
                 
                 <div className="certificate-benefits">
@@ -93,9 +157,14 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
                 <p>You already have a certificate for this course.</p>
                 
                 <div className="certificate-preview">
-                  <strong>Issued on:</strong> {new Date(eligibility.certificate.issuedDate).toLocaleDateString()}
-                  <br />
-                  <strong>Verification Code:</strong> {eligibility.certificate.verificationCode}
+                  <div className="preview-row">
+                    <strong>Issued on:</strong> 
+                    <span>{new Date(eligibility.certificate.issuedDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="preview-row">
+                    <strong>Verification Code:</strong>
+                    <span className="verification-code">{eligibility.certificate.verificationCode}</span>
+                  </div>
                 </div>
                 
                 <button 
@@ -112,17 +181,17 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
                 <p>You need to complete the course to earn a certificate.</p>
                 
                 <div className="progress-info">
-                  <strong>Current Progress:</strong> {eligibility.progress}%
+                  <strong>Current Progress:</strong> {eligibility.progress || 0}%
                   <div className="progress-bar">
                     <div 
                       className="progress-fill" 
-                      style={{width: `${eligibility.progress}%`}}
+                      style={{width: `${eligibility.progress || 0}%`}}
                     ></div>
                   </div>
                 </div>
                 
                 <p className="encouragement">
-                    Keep learning! You're {100 - eligibility.progress}% away from your certificate.
+                  Keep learning! You're {100 - (eligibility.progress || 0)}% away from your certificate.
                 </p>
                 
                 <button onClick={onClose} className="continue-learning-btn">
@@ -132,9 +201,11 @@ const CertificateAward = ({ student, courseKey, onClose }) => {
             )}
           </>
         ) : (
-          <div className="loading-certificate">
-            <div className="loading-spinner"></div>
-            <p>Checking certificate eligibility...</p>
+          <div className="no-eligibility">
+            <div className="info-icon">ℹ️</div>
+            <h3>No Certificate Available</h3>
+            <p>Certificate eligibility could not be determined.</p>
+            <button onClick={onClose} className="close-btn">Close</button>
           </div>
         )}
       </div>
