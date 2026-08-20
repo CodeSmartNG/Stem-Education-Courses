@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { paymentService } from '../../utils/paymentService';
-import { getCurrentUser, processLessonPayment, purchaseLesson } from '../../utils/storage';
+import { getCurrentUser, processLessonPayment, purchaseLesson } from '../../firebase/storageService'; // ✅ FIXED
 import PaystackPayment from './PaystackPayment';
 import './PaymentModal.css';
 
