@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   getTeacherCourses,
-  addNewCourse, 
+  addCourse, 
   addLessonToCourse, 
   updateCourse,
   deleteCourse,
@@ -14,8 +14,14 @@ import {
   withdrawFromWallet,
   updateTeacherProfileWithWhatsApp,
   getTeacherWhatsAppUrl,
-  getCurrentUser
-} from '../utils/storage';
+  getCurrentUser,
+  createTeacherUser,
+  approveTeacher,
+  rejectTeacher,
+  getTeachers,
+  getPendingTeachers,
+  getApprovedTeachers
+} from '../firebase/storageService';
 import './TeacherDashboard.css';
 
 const TeacherDashboard = () => {
@@ -25,6 +31,13 @@ const TeacherDashboard = () => {
   const [wallet, setWallet] = useState(null);
   const [teacherProfile, setTeacherProfile] = useState({});
 
+  // File upload states
+  const [selectedVideoFile, setSelectedVideoFile] = useState(null);
+  const [videoFilePreview, setVideoFilePreview] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   // Course Form States
   const [newCourseForm, setNewCourseForm] = useState({
     title: '',
@@ -33,18 +46,19 @@ const TeacherDashboard = () => {
     key: ''
   });
 
-  // Lesson Form States with Video Support and Payment Options
+  // Lesson Form States with Video Upload Support
   const [newLessonForm, setNewLessonForm] = useState({
     courseKey: '',
     title: '',
     content: '',
     duration: '',
-    videoUrl: '',
+    videoFile: null,
     videoTitle: '',
     videoDescription: '',
-    isFree: true, // NEW: Free or paid lesson
-    price: 0, // NEW: Price for paid lessons
-    isLocked: false // NEW: Lock status
+    isFree: true,
+    price: 0,
+    isLocked: false,
+    videoSource: 'upload'
   });
 
   // Quiz Form States
@@ -80,7 +94,7 @@ const TeacherDashboard = () => {
     description: ''
   });
 
-  // NEW: Payment & WhatsApp States
+  // Payment & WhatsApp States
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [withdrawalAmount, setWithdrawalAmount] = useState('');
   const [bankDetails, setBankDetails] = useState({
@@ -89,16 +103,62 @@ const TeacherDashboard = () => {
     accountName: ''
   });
 
-  // Function to extract YouTube video ID from various URL formats
+  // Function to handle video file selection
+  const handleVideoFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const validTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/quicktime', 'video/x-msvideo'];
+      if (!validTypes.includes(file.type)) {
+        alert('Please select a valid video file (MP4, WebM, OGG, MOV, AVI)');
+        e.target.value = '';
+        return;
+      }
+
+      if (file.size > 100 * 1024 * 1024) {
+        alert('Video file is too large. Maximum size is 100MB.');
+        e.target.value = '';
+        return;
+      }
+
+      setSelectedVideoFile(file);
+      
+      const previewUrl = URL.createObjectURL(file);
+      setVideoFilePreview(previewUrl);
+      
+      setNewLessonForm(prev => ({
+        ...prev,
+        videoFile: file,
+        videoTitle: file.name,
+        videoSource: 'upload'
+      }));
+    }
+  };
+
+  // Function to simulate file upload
+  const simulateFileUpload = () => {
+    return new Promise((resolve) => {
+      setIsUploading(true);
+      setUploadProgress(0);
+      
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.random() * 15;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          setIsUploading(false);
+          resolve(true);
+        }
+        setUploadProgress(Math.min(progress, 100));
+      }, 300);
+    });
+  };
+
+  // Function to get YouTube embed URL
   const getYouTubeEmbedUrl = (url) => {
     if (!url) return '';
-
-    // If it's already an embed URL, return as is
-    if (url.includes('youtube.com/embed/')) {
-      return url;
-    }
-
-    // Extract video ID from various YouTube URL formats
+    if (url.includes('youtube.com/embed/')) return url;
+    
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&]+)/,
       /youtube\.com\/v\/([^?]+)/,
@@ -111,12 +171,9 @@ const TeacherDashboard = () => {
         return `https://www.youtube.com/embed/${match[1]}`;
       }
     }
-
-    // If no pattern matches, return original URL
     return url;
   };
 
-  // Function to check if URL is a valid YouTube URL
   const isValidYouTubeUrl = (url) => {
     if (!url) return false;
     return url.includes('youtube.com') || url.includes('youtu.be');
@@ -125,29 +182,53 @@ const TeacherDashboard = () => {
   useEffect(() => {
     loadData();
     loadTeacherProfile();
+    
+    return () => {
+      if (videoFilePreview) {
+        URL.revokeObjectURL(videoFilePreview);
+      }
+    };
   }, []);
 
-  const loadData = () => {
+  useEffect(() => {
+    if (newLessonForm.videoSource === 'upload' && selectedVideoFile) {
+      setNewLessonForm(prev => ({
+        ...prev,
+        videoFile: selectedVideoFile,
+        videoTitle: selectedVideoFile.name
+      }));
+    }
+  }, [selectedVideoFile, newLessonForm.videoSource]);
+
+  const loadData = async () => {
     try {
       const currentUser = getCurrentUser();
-      if (!currentUser || !currentUser.id) {
+      if (!currentUser || !currentUser.uid) {
         console.error('No user logged in');
         return;
       }
 
-      const teacherStats = getTeacherStats(currentUser.id);
-      const teacherCourses = getTeacherCourses(currentUser.id);
-      const walletData = getTeacherWallet(currentUser.id);
+      // Load teacher data from Firebase
+      const teacherStats = await getTeacherStats(currentUser.uid);
+      const teacherCourses = await getTeacherCourses(currentUser.uid);
+      const walletData = await getTeacherWallet(currentUser.uid);
+
+      // Convert courses array to object for backward compatibility
+      const coursesObject = {};
+      if (Array.isArray(teacherCourses)) {
+        teacherCourses.forEach(course => {
+          coursesObject[course.id] = course;
+        });
+      }
 
       setStats(teacherStats);
-      setCoursesState(teacherCourses);
+      setCoursesState(coursesObject);
       setWallet(walletData);
     } catch (error) {
       console.error('Error loading data:', error);
     }
   };
 
-  // NEW: Load teacher profile with WhatsApp
   const loadTeacherProfile = () => {
     try {
       const currentUser = getCurrentUser();
@@ -160,8 +241,8 @@ const TeacherDashboard = () => {
     }
   };
 
-  // NEW: Save WhatsApp number
-  const saveWhatsAppNumber = () => {
+  // Save WhatsApp number
+  const saveWhatsAppNumber = async () => {
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) {
@@ -169,7 +250,7 @@ const TeacherDashboard = () => {
         return;
       }
 
-      updateTeacherProfileWithWhatsApp(currentUser.id, {
+      await updateTeacherProfileWithWhatsApp(currentUser.uid, {
         whatsappNumber: whatsappNumber
       });
       alert('✅ WhatsApp number saved successfully!');
@@ -179,8 +260,8 @@ const TeacherDashboard = () => {
     }
   };
 
-  // NEW: Process withdrawal
-  const handleWithdrawal = () => {
+  // Process withdrawal
+  const handleWithdrawal = async () => {
     try {
       const currentUser = getCurrentUser();
       if (!currentUser) {
@@ -199,7 +280,7 @@ const TeacherDashboard = () => {
       }
 
       if (window.confirm(`Are you sure you want to withdraw ₦${withdrawalAmount}?`)) {
-        const updatedWallet = withdrawFromWallet(currentUser.id, parseFloat(withdrawalAmount), bankDetails);
+        const updatedWallet = await withdrawFromWallet(currentUser.uid, parseFloat(withdrawalAmount), bankDetails);
         setWallet(updatedWallet);
         setWithdrawalAmount('');
         setBankDetails({ bankName: '', accountNumber: '', accountName: '' });
@@ -211,7 +292,7 @@ const TeacherDashboard = () => {
   };
 
   // Course Management Functions
-  const handleAddCourse = (e) => {
+  const handleAddCourse = async (e) => {
     e.preventDefault();
     try {
       const currentUser = getCurrentUser();
@@ -222,13 +303,13 @@ const TeacherDashboard = () => {
 
       const courseData = {
         ...newCourseForm,
-        teacherId: currentUser.id,
+        teacherId: currentUser.uid,
         teacherName: currentUser.name,
         createdAt: new Date().toISOString(),
         lessons: []
       };
 
-      addNewCourse(courseData);
+      await addCourse(courseData, currentUser.uid);
       alert('Course added successfully!');
       setNewCourseForm({
         title: '',
@@ -236,7 +317,7 @@ const TeacherDashboard = () => {
         thumbnail: '📚',
         key: ''
       });
-      loadData();
+      await loadData();
       setActiveTab('my-courses');
     } catch (error) {
       alert('Error adding course: ' + error.message);
@@ -258,25 +339,25 @@ const TeacherDashboard = () => {
     setEditCourseForm({});
   };
 
-  const handleUpdateCourse = (e) => {
+  const handleUpdateCourse = async (e) => {
     e.preventDefault();
     try {
-      updateCourse(editingCourse, editCourseForm);
+      await updateCourse(editingCourse, editCourseForm);
       alert('Course updated successfully!');
       setEditingCourse(null);
       setEditCourseForm({});
-      loadData();
+      await loadData();
     } catch (error) {
       alert('Error updating course: ' + error.message);
     }
   };
 
-  const handleDeleteCourse = (courseKey) => {
+  const handleDeleteCourse = async (courseKey) => {
     if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
       try {
-        deleteCourse(courseKey);
+        await deleteCourse(courseKey);
         alert('Course deleted successfully!');
-        loadData();
+        await loadData();
       } catch (error) {
         alert('Error deleting course: ' + error.message);
       }
@@ -306,7 +387,6 @@ const TeacherDashboard = () => {
       questions: [...prev.questions, newQuestion]
     }));
 
-    // Reset current question
     setCurrentQuestion({
       question: '',
       type: 'text',
@@ -355,10 +435,14 @@ const TeacherDashboard = () => {
     setShowQuizForm(false);
   };
 
-  // Lesson Management Functions with Video Support and Payment Options
-  const handleAddLesson = (e) => {
+  // Lesson Management Functions with Video Upload
+  const handleAddLesson = async (e) => {
     e.preventDefault();
     try {
+      if (selectedVideoFile) {
+        await simulateFileUpload();
+      }
+
       const lessonData = {
         title: newLessonForm.title,
         content: newLessonForm.content,
@@ -366,24 +450,37 @@ const TeacherDashboard = () => {
         completed: false,
         multimedia: [],
         quiz: null,
-        isFree: newLessonForm.isFree, // NEW
-        price: newLessonForm.isFree ? 0 : newLessonForm.price, // NEW
-        isLocked: !newLessonForm.isFree // NEW: Lock paid lessons by default
+        isFree: newLessonForm.isFree,
+        price: newLessonForm.isFree ? 0 : newLessonForm.price,
+        isLocked: !newLessonForm.isFree
       };
 
-      // Add video if provided
-      if (newLessonForm.videoUrl) {
+      if (newLessonForm.videoSource === 'upload' && selectedVideoFile) {
+        const videoUrl = videoFilePreview || URL.createObjectURL(selectedVideoFile);
+        
+        lessonData.multimedia.push({
+          type: 'video',
+          url: videoUrl,
+          title: newLessonForm.videoTitle || selectedVideoFile.name,
+          description: newLessonForm.videoDescription || 'Video content for this lesson',
+          fileType: selectedVideoFile.type,
+          fileSize: selectedVideoFile.size,
+          fileName: selectedVideoFile.name,
+          isUploaded: true,
+          uploadedAt: new Date().toISOString()
+        });
+      } else if (newLessonForm.videoUrl && newLessonForm.videoSource === 'youtube') {
         const embedUrl = getYouTubeEmbedUrl(newLessonForm.videoUrl);
         lessonData.multimedia.push({
           type: 'video',
           url: embedUrl,
           title: newLessonForm.videoTitle || 'Lesson Video',
           description: newLessonForm.videoDescription || 'Video content for this lesson',
-          originalUrl: newLessonForm.videoUrl // Store original URL for reference
+          originalUrl: newLessonForm.videoUrl,
+          isYouTube: true
         });
       }
 
-      // Add quiz if there are questions
       if (quizForm.questions.length > 0) {
         lessonData.quiz = {
           title: quizForm.title || 'Lesson Quiz',
@@ -392,24 +489,31 @@ const TeacherDashboard = () => {
         };
       }
 
-      addLessonToCourse(newLessonForm.courseKey, lessonData);
+      await addLessonToCourse(newLessonForm.courseKey, lessonData);
       alert('Lesson added successfully!');
 
-      // Reset all forms
       setNewLessonForm({
         courseKey: '',
         title: '',
         content: '',
         duration: '',
-        videoUrl: '',
+        videoFile: null,
         videoTitle: '',
         videoDescription: '',
         isFree: true,
         price: 0,
-        isLocked: false
+        isLocked: false,
+        videoSource: 'upload'
       });
+      setSelectedVideoFile(null);
+      setVideoFilePreview(null);
+      setUploadProgress(0);
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       resetQuizForm();
-      loadData();
+      await loadData();
     } catch (error) {
       alert('Error adding lesson: ' + error.message);
     }
@@ -426,8 +530,8 @@ const TeacherDashboard = () => {
       title: lesson.title,
       content: lesson.content,
       duration: lesson.duration,
-      isFree: lesson.isFree, // NEW
-      price: lesson.price // NEW
+      isFree: lesson.isFree,
+      price: lesson.price
     });
   };
 
@@ -436,30 +540,30 @@ const TeacherDashboard = () => {
     setEditLessonForm({});
   };
 
-  const handleUpdateLesson = (e) => {
+  const handleUpdateLesson = async (e) => {
     e.preventDefault();
     try {
       const updatedData = {
         ...editLessonForm,
-        isLocked: !editLessonForm.isFree // Update lock status based on free/paid
+        isLocked: !editLessonForm.isFree
       };
       
-      updateLesson(editingLesson.courseKey, editingLesson.lessonId, updatedData);
+      await updateLesson(editingLesson.courseKey, editingLesson.lessonId, updatedData);
       alert('Lesson updated successfully!');
       setEditingLesson(null);
       setEditLessonForm({});
-      loadData();
+      await loadData();
     } catch (error) {
       alert('Error updating lesson: ' + error.message);
     }
   };
 
-  const handleDeleteLesson = (courseKey, lessonId, lessonTitle) => {
+  const handleDeleteLesson = async (courseKey, lessonId, lessonTitle) => {
     if (window.confirm(`Are you sure you want to delete the lesson "${lessonTitle}"?`)) {
       try {
-        deleteLesson(courseKey, lessonId);
+        await deleteLesson(courseKey, lessonId);
         alert('Lesson deleted successfully!');
-        loadData();
+        await loadData();
       } catch (error) {
         alert('Error deleting lesson: ' + error.message);
       }
@@ -472,17 +576,16 @@ const TeacherDashboard = () => {
     setActiveTab('manage-multimedia');
   };
 
-  const handleAddMultimedia = (e) => {
+  const handleAddMultimedia = async (e) => {
     e.preventDefault();
     try {
       const multimediaData = { ...newMultimediaForm };
 
-      // Convert YouTube URLs to embed format
       if (multimediaData.type === 'video' && isValidYouTubeUrl(multimediaData.url)) {
         multimediaData.url = getYouTubeEmbedUrl(multimediaData.url);
       }
 
-      addMultimediaToLesson(
+      await addMultimediaToLesson(
         managingMultimedia.courseKey, 
         managingMultimedia.lesson.id, 
         multimediaData
@@ -494,29 +597,28 @@ const TeacherDashboard = () => {
         title: '',
         description: ''
       });
-      loadData();
+      await loadData();
     } catch (error) {
       alert('Error adding multimedia: ' + error.message);
     }
   };
 
-  const handleDeleteMultimedia = (multimediaId, multimediaTitle) => {
+  const handleDeleteMultimedia = async (multimediaId, multimediaTitle) => {
     if (window.confirm(`Are you sure you want to delete "${multimediaTitle}"?`)) {
       try {
-        deleteMultimediaFromLesson(
+        await deleteMultimediaFromLesson(
           managingMultimedia.courseKey, 
           managingMultimedia.lesson.id, 
           multimediaId
         );
         alert('Multimedia content deleted successfully!');
-        loadData();
+        await loadData();
       } catch (error) {
         alert('Error deleting multimedia: ' + error.message);
       }
     }
   };
 
-  // NEW: Format currency
   const formatCurrency = (amount) => {
     return `₦${amount?.toLocaleString() || '0'}`;
   };
@@ -532,7 +634,6 @@ const TeacherDashboard = () => {
         <p>Manage Your Courses, Earnings, and Lessons</p>
       </div>
 
-      {/* Updated Tabs with Payment and WhatsApp */}
       <div className="teacher-tabs">
         <button onClick={() => setActiveTab('overview')} className={activeTab === 'overview' ? 'active' : ''}>
           Overview
@@ -552,7 +653,6 @@ const TeacherDashboard = () => {
         <button onClick={() => setActiveTab('manage-multimedia')} className={activeTab === 'manage-multimedia' ? 'active' : ''}>
           Manage Media
         </button>
-        {/* NEW TABS */}
         <button onClick={() => setActiveTab('earnings')} className={activeTab === 'earnings' ? 'active' : ''}>
           💰 Earnings {wallet && `(${formatCurrency(wallet.balance)})`}
         </button>
@@ -562,10 +662,9 @@ const TeacherDashboard = () => {
       </div>
 
       <div className="teacher-content">
-        {/* Overview Tab - Add wallet summary */}
+        {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">
-            {/* Wallet Summary Card */}
             {wallet && (
               <div className="wallet-summary">
                 <h3>💰 Earnings Summary</h3>
@@ -586,7 +685,6 @@ const TeacherDashboard = () => {
               </div>
             )}
 
-            {/* Existing stats grid */}
             <div className="stats-grid">
               <div className="stat-card">
                 <h3>My Courses</h3>
@@ -619,14 +717,12 @@ const TeacherDashboard = () => {
             
             {wallet ? (
               <div className="earnings-content">
-                {/* Wallet Balance */}
                 <div className="balance-card">
                   <h4>Available Balance</h4>
                   <div className="balance-amount">{formatCurrency(wallet.balance)}</div>
                   <p>Total Earnings: {formatCurrency(wallet.totalEarnings)}</p>
                 </div>
 
-                {/* Withdrawal Form */}
                 <div className="withdrawal-section">
                   <h4>Withdraw Funds</h4>
                   <div className="withdrawal-form">
@@ -683,7 +779,6 @@ const TeacherDashboard = () => {
                   </div>
                 </div>
 
-                {/* Transaction History */}
                 <div className="transaction-history">
                   <h4>Transaction History</h4>
                   {wallet.transactions && wallet.transactions.length > 0 ? (
@@ -745,7 +840,7 @@ const TeacherDashboard = () => {
                   <h4>Your WhatsApp Contact Link:</h4>
                   <div className="whatsapp-link">
                     <a 
-                      href={getTeacherWhatsAppUrl(teacherProfile.id)} 
+                      href={getTeacherWhatsAppUrl(teacherProfile.uid)} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="whatsapp-btn"
@@ -760,7 +855,7 @@ const TeacherDashboard = () => {
           </div>
         )}
 
-        {/* My Courses Tab with Edit Functionality */}
+        {/* My Courses Tab */}
         {activeTab === 'my-courses' && (
           <div className="courses-tab">
             <h3>My Courses</h3>
@@ -895,7 +990,6 @@ const TeacherDashboard = () => {
                                 required
                               />
                             </div>
-                            {/* NEW: Pricing in Edit Form */}
                             <div className="form-group">
                               <label>Lesson Type</label>
                               <div className="pricing-options">
@@ -951,6 +1045,7 @@ const TeacherDashboard = () => {
                             {lesson.multimedia && lesson.multimedia.length > 0 && (
                               <div className="lesson-media-indicator">
                                 🎬 {lesson.multimedia.length} media file(s)
+                                {lesson.multimedia.some(m => m.isUploaded) && ' (Includes uploaded video)'}
                               </div>
                             )}
                             {lesson.quiz && (
@@ -1034,7 +1129,7 @@ const TeacherDashboard = () => {
           </div>
         )}
 
-        {/* Add Lesson Tab with Video Embedding, Quiz, and Payment Options */}
+        {/* Add Lesson Tab */}
         {activeTab === 'add-lesson' && (
           <div className="add-lesson-tab">
             <h3>Add New Lesson</h3>
@@ -1063,9 +1158,179 @@ const TeacherDashboard = () => {
                 />
               </div>
 
-              {/* NEW: Lesson Pricing Section */}
+              {/* Video Upload Section */}
+              <div className="video-upload-section">
+                <h4>📹 Video Content</h4>
+                
+                <div className="video-source-selector">
+                  <label className="video-source-option">
+                    <input
+                      type="radio"
+                      name="videoSource"
+                      checked={newLessonForm.videoSource === 'upload'}
+                      onChange={() => setNewLessonForm(prev => ({...prev, videoSource: 'upload', videoUrl: ''}))}
+                    />
+                    <span className="option-label">📤 Upload Video from Device</span>
+                  </label>
+                  <label className="video-source-option">
+                    <input
+                      type="radio"
+                      name="videoSource"
+                      checked={newLessonForm.videoSource === 'youtube'}
+                      onChange={() => setNewLessonForm(prev => ({...prev, videoSource: 'youtube', videoFile: null}))}
+                    />
+                    <span className="option-label">🔗 YouTube Link</span>
+                  </label>
+                </div>
+
+                {/* Upload Video Option */}
+                {newLessonForm.videoSource === 'upload' && (
+                  <div className="upload-video-section">
+                    <div className="file-upload-area">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="video/*"
+                        onChange={handleVideoFileSelect}
+                        className="file-input"
+                        id="video-upload"
+                      />
+                      <label htmlFor="video-upload" className="file-upload-label">
+                        <span className="upload-icon">📤</span>
+                        <span className="upload-text">
+                          {selectedVideoFile ? selectedVideoFile.name : 'Choose a video file'}
+                        </span>
+                        <span className="upload-hint">MP4, WebM, OGG, MOV, AVI (Max 100MB)</span>
+                      </label>
+                    </div>
+
+                    {selectedVideoFile && (
+                      <div className="video-file-info">
+                        <span className="file-name">📹 {selectedVideoFile.name}</span>
+                        <span className="file-size">Size: {(selectedVideoFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                        <span className="file-type">Type: {selectedVideoFile.type}</span>
+                      </div>
+                    )}
+
+                    {videoFilePreview && (
+                      <div className="video-preview-container">
+                        <video 
+                          src={videoFilePreview} 
+                          controls 
+                          className="video-preview-player"
+                          style={{ maxWidth: '100%', maxHeight: '300px' }}
+                        />
+                        <button 
+                          type="button" 
+                          className="remove-video-btn"
+                          onClick={() => {
+                            setSelectedVideoFile(null);
+                            setVideoFilePreview(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                            setNewLessonForm(prev => ({...prev, videoFile: null, videoTitle: ''}));
+                          }}
+                        >
+                          Remove Video
+                        </button>
+                      </div>
+                    )}
+
+                    {isUploading && (
+                      <div className="upload-progress-container">
+                        <div className="upload-progress-bar">
+                          <div 
+                            className="upload-progress-fill" 
+                            style={{ width: `${uploadProgress}%` }}
+                          >
+                            {uploadProgress}%
+                          </div>
+                        </div>
+                        <span className="upload-progress-text">Uploading video... {uploadProgress}%</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* YouTube Link Option */}
+                {newLessonForm.videoSource === 'youtube' && (
+                  <div className="youtube-section">
+                    <div className="form-group">
+                      <label>YouTube URL</label>
+                      <input
+                        type="url"
+                        value={newLessonForm.videoUrl || ''}
+                        onChange={(e) => setNewLessonForm({...newLessonForm, videoUrl: e.target.value})}
+                        placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
+                      />
+                      <small>Supports youtube.com/watch, youtu.be, and embed links</small>
+                    </div>
+
+                    {newLessonForm.videoUrl && isValidYouTubeUrl(newLessonForm.videoUrl) && (
+                      <div className="youtube-preview">
+                        <h5>Preview:</h5>
+                        <iframe
+                          src={getYouTubeEmbedUrl(newLessonForm.videoUrl)}
+                          title="YouTube Preview"
+                          width="100%"
+                          height="250"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {newLessonForm.videoSource !== 'upload' && newLessonForm.videoSource !== 'youtube' && (
+                  <p className="video-hint">Select a video source above to add video content to your lesson.</p>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Video Title</label>
+                <input
+                  type="text"
+                  value={newLessonForm.videoTitle}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, videoTitle: e.target.value})}
+                  placeholder="Lesson Video Tutorial"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Video Description</label>
+                <input
+                  type="text"
+                  value={newLessonForm.videoDescription}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, videoDescription: e.target.value})}
+                  placeholder="Watch this video to learn more"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Lesson Content</label>
+                <textarea
+                  value={newLessonForm.content}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, content: e.target.value})}
+                  required
+                  rows="4"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Duration</label>
+                <input
+                  type="text"
+                  value={newLessonForm.duration}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, duration: e.target.value})}
+                  placeholder="30 minutes"
+                  required
+                />
+              </div>
+
+              {/* Pricing Section */}
               <div className="pricing-section">
-                <h4>Lesson Pricing</h4>
+                <h4>💰 Lesson Pricing</h4>
                 <div className="pricing-options">
                   <label className="pricing-option">
                     <input
@@ -1108,101 +1373,10 @@ const TeacherDashboard = () => {
                 )}
               </div>
 
-              <div className="form-group">
-                <label>Lesson Content</label>
-                <textarea
-                  value={newLessonForm.content}
-                  onChange={(e) => setNewLessonForm({...newLessonForm, content: e.target.value})}
-                  required
-                  rows="4"
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Duration</label>
-                <input
-                  type="text"
-                  value={newLessonForm.duration}
-                  onChange={(e) => setNewLessonForm({...newLessonForm, duration: e.target.value})}
-                  placeholder="30 minutes"
-                  required
-                />
-              </div>
-
-              {/* Video Embed Section */}
-              <div className="video-embed-section">
-                <h4>Video Content (Optional)</h4>
-                <div className="form-group">
-                  <label>Video URL (YouTube, Vimeo, etc.)</label>
-                  <input
-                    type="url"
-                    value={newLessonForm.videoUrl}
-                    onChange={(e) => setNewLessonForm({...newLessonForm, videoUrl: e.target.value})}
-                    placeholder="https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID"
-                  />
-                  <small className="help-text">
-                    For YouTube: You can use regular YouTube links (watch or youtu.be). We'll automatically convert them to embed format.
-                  </small>
-                </div>
-
-                <div className="form-group">
-                  <label>Video Title</label>
-                  <input
-                    type="text"
-                    value={newLessonForm.videoTitle}
-                    onChange={(e) => setNewLessonForm({...newLessonForm, videoTitle: e.target.value})}
-                    placeholder="Lesson Video Tutorial"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Video Description</label>
-                  <input
-                    type="text"
-                    value={newLessonForm.videoDescription}
-                    onChange={(e) => setNewLessonForm({...newLessonForm, videoDescription: e.target.value})}
-                    placeholder="Watch this video to learn more"
-                  />
-                </div>
-
-                {/* Video Preview */}
-                {newLessonForm.videoUrl && (
-                  <div className="video-preview">
-                    <h5>Video Preview:</h5>
-                    <div className="preview-container">
-                      {isValidYouTubeUrl(newLessonForm.videoUrl) ? (
-                        <iframe
-                          src={getYouTubeEmbedUrl(newLessonForm.videoUrl)}
-                          title="Video Preview"
-                          width="100%"
-                          height="200"
-                          frameBorder="0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        ></iframe>
-                      ) : newLessonForm.videoUrl.includes('vimeo.com') ? (
-                        <iframe
-                          src={newLessonForm.videoUrl}
-                          title="Video Preview"
-                          width="100%"
-                          height="200"
-                          frameBorder="0"
-                          allowFullScreen
-                        ></iframe>
-                      ) : (
-                        <div className="video-link-preview">
-                          <p>🔗 Video Link: <a href={newLessonForm.videoUrl} target="_blank" rel="noopener noreferrer">{newLessonForm.videoUrl}</a></p>
-                          <small>Note: Only YouTube and Vimeo embed URLs will show preview. For other video platforms, students will be directed to the video page.</small>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Quiz Section */}
               <div className="quiz-section">
                 <div className="section-header">
-                  <h4>Quiz Content (Optional)</h4>
+                  <h4>📝 Quiz Content (Optional)</h4>
                   <button 
                     type="button"
                     onClick={() => setShowQuizForm(!showQuizForm)}
@@ -1235,10 +1409,8 @@ const TeacherDashboard = () => {
                       />
                     </div>
 
-                    {/* Current Question Form */}
                     <div className="current-question">
                       <h5>Add New Question</h5>
-
                       <div className="form-group">
                         <label>Question Type</label>
                         <select
@@ -1305,7 +1477,6 @@ const TeacherDashboard = () => {
                       </button>
                     </div>
 
-                    {/* Existing Questions List */}
                     {quizForm.questions.length > 0 && (
                       <div className="existing-questions">
                         <h5>Questions in Quiz ({quizForm.questions.length})</h5>
@@ -1340,7 +1511,9 @@ const TeacherDashboard = () => {
                 )}
               </div>
 
-              <button type="submit" className="submit-btn">Add Lesson</button>
+              <button type="submit" className="submit-btn" disabled={isUploading}>
+                {isUploading ? `Uploading Video... ${uploadProgress}%` : 'Add Lesson'}
+              </button>
             </form>
           </div>
         )}
@@ -1395,7 +1568,6 @@ const TeacherDashboard = () => {
                   <h4>Managing: {managingMultimedia.lesson.title}</h4>
                 </div>
 
-                {/* Add New Multimedia Form */}
                 <div className="add-multimedia-form">
                   <h5>Add New Multimedia Content</h5>
                   <form onSubmit={handleAddMultimedia} className="teacher-form compact">
@@ -1428,7 +1600,7 @@ const TeacherDashboard = () => {
                       />
                       <small className="help-text">
                         {newMultimediaForm.type === 'video' 
-                          ? 'For YouTube: Use regular YouTube links (watch or youtu.be). We\'ll automatically convert to embed format.' 
+                          ? 'For YouTube: Use regular YouTube links (watch or youtu.be). For uploaded videos, use the URL from the media.' 
                           : 'Direct link to image, audio file, or document'}
                       </small>
                     </div>
@@ -1456,7 +1628,6 @@ const TeacherDashboard = () => {
                   </form>
                 </div>
 
-                {/* Existing Multimedia List */}
                 <div className="existing-multimedia">
                   <h5>Existing Media Content</h5>
                   {managingMultimedia.lesson.multimedia && managingMultimedia.lesson.multimedia.length > 0 ? (
@@ -1471,6 +1642,7 @@ const TeacherDashboard = () => {
                             <div className="media-info">
                               <strong>{media.title}</strong>
                               <span>Type: {media.type}</span>
+                              {media.isUploaded && <span className="uploaded-badge">📤 Uploaded</span>}
                               <span className="media-url">{media.url}</span>
                             </div>
                           </div>
