@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { getCourses, getCurrentUser, canAccessLesson, purchaseLesson, getTeacherWhatsAppUrl, getLessons } from '../utils/storage';
+import { 
+  getCourses, 
+  getCurrentUser, 
+  canAccessLesson, 
+  purchaseLesson, 
+  getTeacherWhatsAppUrl,
+  getLessons,
+  updateProgress,
+  enrollStudent,
+  getCourseById
+} from '../firebase/storageService';
 
 import Quiz from './Quiz';
 import MultimediaViewer from './MultimediaViewer';
@@ -17,21 +27,35 @@ const CourseCatalog = ({ student, setStudent }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  // Load courses from storage
+  // Load courses from Firebase
   useEffect(() => {
     loadCourses();
   }, []);
 
-  const loadCourses = () => {
+  const loadCourses = async () => {
     try {
-      const coursesData = getCourses();
+      setLoading(true);
+      const coursesData = await getCourses();
       console.log('Loaded courses:', coursesData);
-      // Ensure coursesData is always an object
-      setCourses(coursesData || {});
+      
+      // Convert array to object for backward compatibility
+      const coursesObject = {};
+      if (Array.isArray(coursesData)) {
+        coursesData.forEach(course => {
+          coursesObject[course.id] = course;
+        });
+      }
+      
+      setCourses(coursesObject || {});
+      setError(null);
     } catch (err) {
       console.error('Error loading courses:', err);
+      setError(err);
       setCourses({});
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -104,28 +128,46 @@ const CourseCatalog = ({ student, setStudent }) => {
     }
   };
 
-  const handleQuizComplete = (scorePercentage, passed) => {
+  const handleQuizComplete = async (scorePercentage, passed) => {
     try {
       if (!selectedCourse || !courses[selectedCourse]) return;
 
-      const updatedStudent = { ...student };
-      const lessonId = `${selectedCourse}-${courses[selectedCourse].lessons?.[currentLesson]?.id}`;
-
-      if (passed && lessonId && !updatedStudent.completedLessons?.includes(lessonId)) {
-        if (!updatedStudent.completedLessons) updatedStudent.completedLessons = [];
-        updatedStudent.completedLessons.push(lessonId);
-
-        // Update course progress
-        const totalLessons = courses[selectedCourse].lessons?.length || 0;
-        const completedLessons = courses[selectedCourse].lessons?.filter(
-          lesson => updatedStudent.completedLessons?.includes(`${selectedCourse}-${lesson.id}`)
-        ).length || 0;
-
-        if (!updatedStudent.progress) updatedStudent.progress = {};
-        updatedStudent.progress[selectedCourse] = Math.min((completedLessons / totalLessons) * 100, 100);
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        console.error('No user logged in');
+        return;
       }
 
-      setStudent(updatedStudent);
+      const lessonId = courses[selectedCourse].lessons?.[currentLesson]?.id;
+      const studentId = currentUser.uid;
+
+      if (passed && lessonId) {
+        // Update progress in Firebase
+        await updateProgress(studentId, selectedCourse, 
+          courses[selectedCourse].progress || 0, 
+          lessonId
+        );
+        
+        // Update local student state
+        const updatedStudent = { ...student };
+        const lessonKey = `${selectedCourse}-${lessonId}`;
+        
+        if (!updatedStudent.completedLessons) updatedStudent.completedLessons = [];
+        if (!updatedStudent.completedLessons.includes(lessonKey)) {
+          updatedStudent.completedLessons.push(lessonKey);
+          
+          const totalLessons = courses[selectedCourse].lessons?.length || 0;
+          const completedLessons = courses[selectedCourse].lessons?.filter(
+            lesson => updatedStudent.completedLessons?.includes(`${selectedCourse}-${lesson.id}`)
+          ).length || 0;
+
+          if (!updatedStudent.progress) updatedStudent.progress = {};
+          updatedStudent.progress[selectedCourse] = Math.min((completedLessons / totalLessons) * 100, 100);
+        }
+        
+        setStudent(updatedStudent);
+      }
+
       setShowQuiz(false);
       setCurrentQuiz(null);
     } catch (err) {
@@ -138,64 +180,56 @@ const CourseCatalog = ({ student, setStudent }) => {
     setCurrentQuiz(null);
   };
 
-  // NEW: Check if student can access lesson
-  const canAccessLessonContent = (courseKey, lessonId) => {
+  // Check if student can access lesson
+  const canAccessLessonContent = async (courseKey, lessonId) => {
     const currentUser = getCurrentUser();
     if (!currentUser) return false;
-    
-    return canAccessLesson(currentUser.id, courseKey, lessonId);
+    return await canAccessLesson(currentUser.uid, courseKey, lessonId);
   };
 
-  
-
-
-
-
-
-// NEW: Handle lesson purchase
-const handlePurchaseLesson = async (courseKey, lessonIndex) => {
-  try {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      alert('Please log in to purchase lessons');
-      return;
-    }
-
-    const course = courses[courseKey];
-    const lesson = course.lessons?.[lessonIndex];
-
-    if (!lesson) {
-      console.error('Lesson not found');
-      return;
-    }
-
-    if (window.confirm(`Are you sure you want to purchase "${lesson.title}" for ₦${lesson.price}?`)) {
-      const paymentResult = await purchaseLesson(currentUser.id, courseKey, lesson.id, {
-        paymentId: `pay_${Date.now()}`,
-        amount: lesson.price || 5000,
-        gateway: 'paystack',
-        timestamp: new Date().toISOString()
-      });
-
-      if (paymentResult) {
-        alert('✅ Payment successful! You now have access to this lesson.');
-        // Reload courses to reflect the purchase
-        loadCourses();
-        // Start the lesson
-        setSelectedCourse(courseKey);
-        setCurrentLesson(lessonIndex);
-      } else {
-        alert('❌ Payment failed. Please try again.');
+  // Handle lesson purchase
+  const handlePurchaseLesson = async (courseKey, lessonIndex) => {
+    try {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        alert('Please log in to purchase lessons');
+        return;
       }
+
+      const course = courses[courseKey];
+      const lesson = course.lessons?.[lessonIndex];
+
+      if (!lesson) {
+        console.error('Lesson not found');
+        return;
+      }
+
+      if (window.confirm(`Are you sure you want to purchase "${lesson.title}" for ₦${lesson.price}?`)) {
+        const paymentResult = await purchaseLesson(currentUser.uid, courseKey, lesson.id, {
+          paymentId: `pay_${Date.now()}`,
+          amount: lesson.price || 5000,
+          gateway: 'paystack',
+          timestamp: new Date().toISOString()
+        });
+
+        if (paymentResult) {
+          alert('✅ Payment successful! You now have access to this lesson.');
+          // Reload courses to reflect the purchase
+          await loadCourses();
+          // Start the lesson
+          setSelectedCourse(courseKey);
+          setCurrentLesson(lessonIndex);
+        } else {
+          alert('❌ Payment failed. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('Error purchasing lesson:', error);
+      alert('❌ Error processing payment: ' + error.message);
     }
-  } catch (error) {
-    console.error('Error purchasing lesson:', error);
-    alert('❌ Error processing payment: ' + error.message);
-  }
-};
+  };
 
-
-  // UPDATED: Handle starting a lesson with new payment system
+  // Handle starting a lesson with payment system
   const handleStartLesson = (courseKey, lessonIndex) => {
     try {
       if (!courses || !courses[courseKey]) return;
@@ -214,15 +248,15 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         return;
       }
 
-      // NEW: Check if lesson is paid and if student has access
-      if (!lesson.isFree && !canAccessLesson(currentUser.id, courseKey, lesson.id)) {
+      // Check if lesson is paid and if student has access
+      if (!lesson.isFree && !canAccessLesson(currentUser.uid, courseKey, lesson.id)) {
         // Show payment modal for paid lessons without access
         setSelectedLesson({ 
           courseKey, 
           lessonIndex, 
           lesson: { 
             ...lesson, 
-            title: lesson.title || 'Untitled Lesson', // SAFETY CHECK ADDED
+            title: lesson.title || 'Untitled Lesson',
             courseId: courseKey,
             price: lesson.price || 500,
             teacherId: course.teacherId || 'default_teacher',
@@ -233,14 +267,14 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         return;
       }
 
-      // OLD: Check if lesson is locked (backward compatibility)
-      if (lesson.isLocked && !canAccessLesson(currentUser.id, courseKey, lesson.id)) {
+      // Check if lesson is locked (backward compatibility)
+      if (lesson.isLocked && !canAccessLesson(currentUser.uid, courseKey, lesson.id)) {
         setSelectedLesson({ 
           courseKey, 
           lessonIndex, 
           lesson: { 
             ...lesson, 
-            title: lesson.title || 'Untitled Lesson', // SAFETY CHECK ADDED
+            title: lesson.title || 'Untitled Lesson',
             courseId: courseKey,
             price: lesson.price || 500,
             teacherId: course.teacherId || 'default_teacher',
@@ -254,13 +288,13 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
       setSelectedCourse(courseKey);
       setCurrentLesson(lessonIndex);
       setShowQuiz(false);
-      window.scrollTo(0, 0);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       console.error('Error starting lesson:', err);
     }
   };
 
-  // UPDATED: Handle payment success
+  // Handle payment success
   const handlePaymentSuccess = async (paymentData) => {
     try {
       console.log('Payment successful:', paymentData);
@@ -274,7 +308,7 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         );
 
         // 2. Reload courses to reflect the purchase
-        loadCourses();
+        await loadCourses();
         
         // 3. Start the lesson
         setSelectedCourse(selectedLesson.courseKey);
@@ -302,9 +336,15 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
     }
   };
 
-  const completeLesson = (courseKey, lessonId) => {
+  const completeLesson = async (courseKey, lessonId) => {
     try {
       if (!courses || !courses[courseKey]) return;
+
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        alert('Please log in to complete lessons');
+        return;
+      }
 
       const updatedStudent = { ...student };
       const lessonKey = `${courseKey}-${lessonId}`;
@@ -323,6 +363,9 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         updatedStudent.progress[courseKey] = Math.min((completedLessons / totalLessons) * 100, 100);
 
         setStudent(updatedStudent);
+        
+        // Update progress in Firebase
+        await updateProgress(currentUser.uid, courseKey, updatedStudent.progress[courseKey], lessonId);
       }
     } catch (err) {
       console.error('Error completing lesson:', err);
@@ -340,13 +383,25 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
     }
   };
 
-  // NEW: Get teacher WhatsApp URL
+  // Get teacher WhatsApp URL
   const getTeacherContactUrl = (teacherId) => {
     return getTeacherWhatsAppUrl(teacherId);
   };
 
   // Safety check for empty courses
   const courseEntries = safeObjectEntries(courses);
+  
+  if (loading) {
+    return (
+      <div className="course-catalog">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading courses...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (courseEntries.length === 0) {
     return (
       <div className="course-catalog">
@@ -379,7 +434,7 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
 
     const isCompleted = student.completedLessons?.includes(`${selectedCourse}-${lesson.id}`);
     const currentUser = getCurrentUser();
-    const hasAccess = currentUser ? canAccessLesson(currentUser.id, selectedCourse, lesson.id) : false;
+    const hasAccess = currentUser ? canAccessLesson(currentUser.uid, selectedCourse, lesson.id) : false;
 
     return (
       <div className="course-lesson">
@@ -388,9 +443,8 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         </button>
 
         <div className="lesson-header">
-          <h2>{lesson.title || 'Untitled Lesson'}</h2> {/* SAFETY CHECK ADDED */}
+          <h2>{lesson.title || 'Untitled Lesson'}</h2>
           {isCompleted && <span className="completion-badge">Completed ✓</span>}
-          {/* NEW: Show price if paid lesson */}
           {!lesson.isFree && (
             <span className={`price-badge ${hasAccess ? 'purchased' : ''}`}>
               {hasAccess ? '✅ Purchased' : `₦${lesson.price}`}
@@ -401,7 +455,6 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         {course.teacherName && (
           <div className="teacher-info">
             <strong>Instructor:</strong> {course.teacherName}
-            {/* NEW: WhatsApp contact button */}
             {course.teacherId && getTeacherContactUrl(course.teacherId) && (
               <a 
                 href={getTeacherContactUrl(course.teacherId)}
@@ -415,7 +468,6 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
           </div>
         )}
 
-        {/* NEW: Access control for lesson content */}
         {!hasAccess && !lesson.isFree ? (
           <div className="payment-required">
             <div className="payment-prompt">
@@ -431,7 +483,6 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
             </div>
           </div>
         ) : (
-          /* Lesson Content - Only show if user has access */
           <>
             {lesson.multimedia && lesson.multimedia.length > 0 && (
               <div className="multimedia-container">
@@ -525,11 +576,10 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
               <div className="course-header">
                 <span className="course-thumbnail">{course.thumbnail}</span>
                 <div className="course-title-section">
-                  <h3>{course.title || 'Untitled Course'}</h3> {/* SAFETY CHECK ADDED */}
+                  <h3>{course.title || 'Untitled Course'}</h3>
                   {course.teacherName && (
                     <div className="course-teacher">
                       <small>By: {course.teacherName}</small>
-                      {/* NEW: WhatsApp contact for teacher */}
                       {course.teacherId && getTeacherContactUrl(course.teacherId) && (
                         <a 
                           href={getTeacherContactUrl(course.teacherId)}
@@ -553,7 +603,6 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
 
               <p className="course-description">{course.description}</p>
 
-              {/* NEW: Course pricing summary */}
               <div className="course-pricing-summary">
                 <span className="free-lessons">{freeLessonsCount} Free</span>
                 {paidLessonsCount > 0 && (
@@ -594,7 +643,7 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
                 <div className="lessons-list">
                   {course.lessons?.map((lesson, index) => {
                     const isLessonCompleted = student.completedLessons?.includes(`${key}-${lesson.id}`);
-                    const hasAccess = currentUser ? canAccessLesson(currentUser.id, key, lesson.id) : false;
+                    const hasAccess = currentUser ? canAccessLesson(currentUser.uid, key, lesson.id) : false;
                     const isPaidLesson = !lesson.isFree;
 
                     return (
@@ -602,7 +651,7 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
                         <div className="lesson-info">
                           <div className="lesson-main-info">
                             <span className="lesson-title">
-                              {lesson.title || 'Untitled Lesson'} {/* SAFETY CHECK ADDED */}
+                              {lesson.title || 'Untitled Lesson'}
                               {isPaidLesson && !hasAccess && <span className="lock-icon"> 🔒</span>}
                               {isPaidLesson && (
                                 <span className={`lesson-price ${hasAccess ? 'purchased' : ''}`}>
@@ -650,12 +699,11 @@ const handlePurchaseLesson = async (courseKey, lessonIndex) => {
         })}
       </div>
 
-      {/* UPDATED: PaymentModal with safety checks */}
       <PaymentModal
-        isOpen={showPaymentModal && selectedLesson?.lesson} // VALIDATION ADDED
+        isOpen={showPaymentModal && selectedLesson?.lesson}
         onClose={() => {
           setShowPaymentModal(false);
-          setSelectedLesson(null); // Reset on close
+          setSelectedLesson(null);
         }}
         lesson={selectedLesson?.lesson}
         student={student}
