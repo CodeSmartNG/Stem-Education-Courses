@@ -3,7 +3,7 @@ import {
   getPendingTeachers, 
   approveTeacher, 
   rejectTeacher, 
-  getAllTeachers,
+  getTeachers,
   getPlatformStats,
   getUsers,
   getStudents,
@@ -16,8 +16,10 @@ import {
   updateTeacherWallet,
   getPaymentTransactions,
   savePaymentTransactions,
-  saveTeacherWallets
-} from '../utils/storage';
+  saveTeacherWallets,
+  getCurrentUser,
+  getApprovedTeachers
+} from '../firebase/storageService';
 import './AdminDashboard.css';
 
 const AdminDashboard = ({ currentUser, setCurrentView }) => {
@@ -37,156 +39,169 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
     loadData();
   }, []);
 
-  const loadData = () => {
-    const pending = getPendingTeachers();
-    const allTeachers = getAllTeachers();
-    const approved = allTeachers.filter(teacher => teacher.isApproved);
-    const platformStats = getPlatformStats();
-    const users = Object.values(getUsers());
-    const courses = Object.values(getAllCoursesForAdmin());
-    const wallets = getTeacherWallets();
-    const transactions = getPaymentTransactions();
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Get all teachers
+      const allTeachers = await getTeachers();
+      const pending = allTeachers.filter(teacher => !teacher.isApproved);
+      const approved = allTeachers.filter(teacher => teacher.isApproved);
+      
+      // Get platform stats
+      const platformStats = await getPlatformStats();
+      
+      // Get all users
+      const users = await getUsers();
+      const usersArray = Object.values(users);
+      
+      // Get all courses
+      const courses = await getAllCoursesForAdmin();
+      const coursesArray = Array.isArray(courses) ? courses : Object.values(courses);
+      
+      // Get wallets and transactions
+      const wallets = await getTeacherWallets();
+      const transactions = await getPaymentTransactions();
 
-    setPendingTeachers(pending);
-    setApprovedTeachers(approved);
-    setAllUsers(users);
-    setAllCourses(courses);
-    setStats(platformStats);
-    setTeacherWallets(wallets);
-    setPaymentTransactions(transactions);
+      setPendingTeachers(pending);
+      setApprovedTeachers(approved);
+      setAllUsers(usersArray);
+      setAllCourses(coursesArray);
+      setStats(platformStats || {});
+      setTeacherWallets(wallets || {});
+      setPaymentTransactions(transactions || {});
 
-    // Extract pending withdrawals
-    const withdrawals = [];
-    Object.values(wallets).forEach(wallet => {
-      wallet.transactions.forEach(transaction => {
-        if (transaction.type === 'debit' && transaction.status === 'pending') {
-          withdrawals.push({
-            ...transaction,
-            teacherId: wallet.teacherId,
-            teacherName: wallet.teacherName
+      // Extract pending withdrawals
+      const withdrawals = [];
+      Object.values(wallets || {}).forEach(wallet => {
+        if (wallet.transactions) {
+          wallet.transactions.forEach(transaction => {
+            if (transaction.type === 'debit' && transaction.status === 'pending') {
+              withdrawals.push({
+                ...transaction,
+                teacherId: wallet.teacherId,
+                teacherName: wallet.teacherName
+              });
+            }
           });
         }
       });
-    });
-    setPendingWithdrawals(withdrawals);
+      setPendingWithdrawals(withdrawals);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      alert('Error loading data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleApproveTeacher = (teacherId) => {
+  const handleApproveTeacher = async (teacherId) => {
     setLoading(true);
     try {
-      approveTeacher(teacherId);
-      loadData(); // Reload data to reflect changes
-      alert('Teacher approved successfully! They can now access the teacher dashboard.');
+      await approveTeacher(teacherId);
+      await loadData();
+      alert('✅ Teacher approved successfully! They can now access the teacher dashboard.');
     } catch (error) {
-      alert('Error approving teacher: ' + error.message);
+      alert('❌ Error approving teacher: ' + error.message);
     }
     setLoading(false);
   };
 
-  const handleRejectTeacher = (teacherId) => {
+  const handleRejectTeacher = async (teacherId) => {
     if (window.confirm('Are you sure you want to reject this teacher application? This action cannot be undone.')) {
       setLoading(true);
       try {
-        rejectTeacher(teacherId);
-        loadData(); // Reload data to reflect changes
-        alert('Teacher application rejected.');
+        await rejectTeacher(teacherId);
+        await loadData();
+        alert('✅ Teacher application rejected.');
       } catch (error) {
-        alert('Error rejecting teacher: ' + error.message);
+        alert('❌ Error rejecting teacher: ' + error.message);
       }
       setLoading(false);
     }
   };
 
-  const handleDismissTeacher = (teacherId) => {
+  const handleDismissTeacher = async (teacherId) => {
     if (window.confirm('Are you sure you want to dismiss this teacher? They will lose all access to the teacher dashboard.')) {
       setLoading(true);
       try {
-        // Update teacher status to not approved
-        const users = getUsers();
-        if (users[teacherId]) {
-          users[teacherId].isApproved = false;
-          users[teacherId].dismissedDate = new Date().toISOString();
-          // Save updated users
-          localStorage.setItem('hausaStem_users', JSON.stringify(users));
-        }
-        loadData(); // Reload data to reflect changes
-        alert('Teacher dismissed successfully.');
+        await updateUser(teacherId, {
+          isApproved: false,
+          dismissedDate: new Date().toISOString()
+        });
+        await loadData();
+        alert('✅ Teacher dismissed successfully.');
       } catch (error) {
-        alert('Error dismissing teacher: ' + error.message);
+        alert('❌ Error dismissing teacher: ' + error.message);
       }
       setLoading(false);
     }
   };
 
-  const handleDeleteUser = (userId) => {
+  const handleDeleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user? This action cannot be undone and all their data will be lost.')) {
       setLoading(true);
       try {
-        deleteUser(userId);
-        loadData(); // Reload data to reflect changes
-        alert('User deleted successfully.');
+        await deleteUser(userId);
+        await loadData();
+        alert('✅ User deleted successfully.');
       } catch (error) {
-        alert('Error deleting user: ' + error.message);
+        alert('❌ Error deleting user: ' + error.message);
       }
       setLoading(false);
     }
   };
 
-  // NEW: Approve teacher withdrawal
-  const handleApproveWithdrawal = (teacherId, transactionId) => {
+  const handleApproveWithdrawal = async (teacherId, transactionId) => {
     if (window.confirm('Are you sure you want to approve this withdrawal? The funds will be transferred to the teacher.')) {
       setLoading(true);
       try {
-        const wallets = getTeacherWallets();
+        const wallets = await getTeacherWallets();
         const wallet = wallets[teacherId];
         
         if (wallet) {
-          // Find and update the transaction
           const updatedTransactions = wallet.transactions.map(transaction => 
             transaction.id === transactionId 
               ? { ...transaction, status: 'completed', completedAt: new Date().toISOString() }
               : transaction
           );
           
-          // Update wallet
-          wallets[teacherId] = {
+          const updatedWallet = {
             ...wallet,
             transactions: updatedTransactions,
-            pendingWithdrawals: Math.max(0, wallet.pendingWithdrawals - transaction.amount),
+            pendingWithdrawals: Math.max(0, wallet.pendingWithdrawals - 
+              wallet.transactions.find(t => t.id === transactionId)?.amount || 0
+            ),
             updatedAt: new Date().toISOString()
           };
           
-          saveTeacherWallets(wallets);
-          loadData();
-          alert('Withdrawal approved successfully!');
+          await updateTeacherWallet(teacherId, updatedWallet);
+          await loadData();
+          alert('✅ Withdrawal approved successfully!');
         }
       } catch (error) {
-        alert('Error approving withdrawal: ' + error.message);
+        alert('❌ Error approving withdrawal: ' + error.message);
       }
       setLoading(false);
     }
   };
 
-  // NEW: Reject teacher withdrawal
-  const handleRejectWithdrawal = (teacherId, transactionId) => {
+  const handleRejectWithdrawal = async (teacherId, transactionId) => {
     if (window.confirm('Are you sure you want to reject this withdrawal? The funds will be returned to the teacher\'s wallet.')) {
       setLoading(true);
       try {
-        const wallets = getTeacherWallets();
+        const wallets = await getTeacherWallets();
         const wallet = wallets[teacherId];
         
         if (wallet) {
-          // Find the transaction to get the amount
           const transaction = wallet.transactions.find(t => t.id === transactionId);
           
-          // Update transactions and return funds
           const updatedTransactions = wallet.transactions.map(t => 
             t.id === transactionId 
               ? { ...t, status: 'rejected', rejectedAt: new Date().toISOString() }
               : t
           );
           
-          wallets[teacherId] = {
+          const updatedWallet = {
             ...wallet,
             balance: wallet.balance + (transaction?.amount || 0),
             pendingWithdrawals: Math.max(0, wallet.pendingWithdrawals - (transaction?.amount || 0)),
@@ -194,12 +209,12 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             updatedAt: new Date().toISOString()
           };
           
-          saveTeacherWallets(wallets);
-          loadData();
-          alert('Withdrawal rejected. Funds returned to teacher wallet.');
+          await updateTeacherWallet(teacherId, updatedWallet);
+          await loadData();
+          alert('✅ Withdrawal rejected. Funds returned to teacher wallet.');
         }
       } catch (error) {
-        alert('Error rejecting withdrawal: ' + error.message);
+        alert('❌ Error rejecting withdrawal: ' + error.message);
       }
       setLoading(false);
     }
@@ -234,21 +249,20 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
   const getUserRoleBadge = (user) => {
     if (user.role === 'admin') {
-      return <span className="role-badge admin">Admin</span>;
+      return <span className="role-badge admin">👑 Admin</span>;
     } else if (user.role === 'teacher') {
       return user.isApproved ? 
-        <span className="role-badge teacher">Teacher</span> :
-        <span className="role-badge pending">Pending Teacher</span>;
+        <span className="role-badge teacher">👨‍🏫 Teacher</span> :
+        <span className="role-badge pending">⏳ Pending</span>;
     } else {
-      return <span className="role-badge student">Student</span>;
+      return <span className="role-badge student">👨‍🎓 Student</span>;
     }
   };
 
-  // Get top courses by enrollment
   const getTopCourses = () => {
     const coursesWithAnalytics = allCourses.map(course => {
       try {
-        const analytics = getCourseAnalyticsForAdmin(course.key);
+        const analytics = getCourseAnalyticsForAdmin(course.id || course.key);
         return { ...course, analytics };
       } catch (error) {
         return { ...course, analytics: { totalEnrolled: 0 } };
@@ -260,52 +274,52 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
       .slice(0, 5);
   };
 
-  // Calculate total platform earnings
   const calculatePlatformEarnings = () => {
     let total = 0;
-    Object.values(teacherWallets).forEach(wallet => {
-      wallet.transactions.forEach(transaction => {
-        if (transaction.type === 'credit') {
-          // Platform fee is 10% (teacher gets 90%)
-          total += transaction.amount * 0.1;
-        }
-      });
+    Object.values(teacherWallets || {}).forEach(wallet => {
+      if (wallet.transactions) {
+        wallet.transactions.forEach(transaction => {
+          if (transaction.type === 'credit') {
+            total += transaction.amount * 0.1;
+          }
+        });
+      }
     });
     return total;
   };
 
+  if (loading && !Object.keys(stats).length) {
+    return <div className="loading">Loading dashboard data...</div>;
+  }
+
   return (
     <div className="admin-dashboard">
       <div className="admin-header">
-        <h1>Admin Dashboard</h1>
-        <p>Welcome back, {currentUser?.name}</p>
+        <h1>👑 Admin Dashboard</h1>
+        <p>Welcome back, {currentUser?.name || 'Admin'}!</p>
       </div>
 
       {/* Quick Actions */}
       <div className="quick-actions">
         <button 
-          key="manage-courses"
           className="action-btn primary"
           onClick={handleManageCourses}
         >
           📚 Manage All Courses
         </button>
         <button 
-          key="review-teachers"
           className="action-btn secondary"
           onClick={() => setActiveTab('pending')}
         >
-          👨‍🏫 Review Teacher Requests ({pendingTeachers.length})
+          👨‍🏫 Review Teachers ({pendingTeachers.length})
         </button>
         <button 
-          key="payment-approvals"
           className="action-btn secondary"
           onClick={() => setActiveTab('payments')}
         >
           💰 Payment Approvals ({pendingWithdrawals.length})
         </button>
         <button 
-          key="view-users"
           className="action-btn secondary"
           onClick={() => setActiveTab('users')}
         >
@@ -315,28 +329,28 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* Statistics Cards */}
       <div className="stats-grid">
-        <div key="stat-students" className="stat-card">
+        <div className="stat-card">
           <div className="stat-icon">👥</div>
           <div className="stat-info">
             <h3>{stats.totalStudents || 0}</h3>
             <p>Total Students</p>
           </div>
         </div>
-        <div key="stat-teachers" className="stat-card">
+        <div className="stat-card">
           <div className="stat-icon">👨‍🏫</div>
           <div className="stat-info">
             <h3>{approvedTeachers.length}</h3>
             <p>Approved Teachers</p>
           </div>
         </div>
-        <div key="stat-earnings" className="stat-card">
+        <div className="stat-card">
           <div className="stat-icon">💰</div>
           <div className="stat-info">
             <h3>{formatCurrency(calculatePlatformEarnings())}</h3>
             <p>Platform Earnings</p>
           </div>
         </div>
-        <div key="stat-pending" className="stat-card">
+        <div className="stat-card">
           <div className="stat-icon">⏳</div>
           <div className="stat-info">
             <h3>{pendingWithdrawals.length}</h3>
@@ -345,16 +359,16 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
         </div>
       </div>
 
-      {/* Overview Tab - Show by default */}
+      {/* Overview Tab */}
       {activeTab === 'overview' && (
-        <div className="overview-tab" key="overview-tab">
+        <div className="overview-tab">
           <div className="overview-grid">
-            {/* Top Courses Section */}
-            <div className="overview-card" key="top-courses">
+            {/* Top Courses */}
+            <div className="overview-card">
               <h3>📊 Top Courses by Enrollment</h3>
               <div className="courses-list">
                 {getTopCourses().map((course, index) => (
-                  <div key={course.key || `course-${index}`} className="course-item">
+                  <div key={course.id || course.key || `course-${index}`} className="course-item">
                     <div className="course-rank">#{index + 1}</div>
                     <div className="course-info">
                       <div className="course-title">{course.title}</div>
@@ -364,24 +378,22 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                         <span>{course.analytics?.totalEnrolled || 0} students</span>
                       </div>
                     </div>
-                    <div className="course-actions">
-                      <button 
-                        className="btn-view-small"
-                        onClick={handleManageCourses}
-                      >
-                        View
-                      </button>
-                    </div>
+                    <button 
+                      className="btn-view-small"
+                      onClick={handleManageCourses}
+                    >
+                      View
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Recent Activity Section */}
-            <div className="overview-card" key="recent-activity">
+            {/* Recent Activity */}
+            <div className="overview-card">
               <h3>🔄 Recent Activity</h3>
               <div className="activity-list">
-                <div key="activity-teachers" className="activity-item">
+                <div className="activity-item">
                   <div className="activity-icon">👨‍🏫</div>
                   <div className="activity-info">
                     <div className="activity-title">Teacher Applications</div>
@@ -390,7 +402,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     </div>
                   </div>
                 </div>
-                <div key="activity-payments" className="activity-item">
+                <div className="activity-item">
                   <div className="activity-icon">💰</div>
                   <div className="activity-info">
                     <div className="activity-title">Payment Approvals</div>
@@ -399,7 +411,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     </div>
                   </div>
                 </div>
-                <div key="activity-courses" className="activity-item">
+                <div className="activity-item">
                   <div className="activity-icon">📚</div>
                   <div className="activity-info">
                     <div className="activity-title">Course Management</div>
@@ -411,23 +423,23 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
               </div>
             </div>
 
-            {/* Quick Stats Section */}
-            <div className="overview-card" key="quick-stats">
+            {/* Quick Stats */}
+            <div className="overview-card">
               <h3>📈 Platform Statistics</h3>
               <div className="stats-list">
-                <div key="stat-total-lessons" className="stat-item">
+                <div className="stat-item">
                   <span className="stat-label">Total Lessons:</span>
                   <span className="stat-value">{stats.totalLessons || 0}</span>
                 </div>
-                <div key="stat-completed-lessons" className="stat-item">
+                <div className="stat-item">
                   <span className="stat-label">Completed Lessons:</span>
                   <span className="stat-value">{stats.totalCompletedLessons || 0}</span>
                 </div>
-                <div key="stat-platform-revenue" className="stat-item">
+                <div className="stat-item">
                   <span className="stat-label">Platform Revenue:</span>
                   <span className="stat-value">{formatCurrency(calculatePlatformEarnings())}</span>
                 </div>
-                <div key="stat-pending-payments" className="stat-item">
+                <div className="stat-item">
                   <span className="stat-label">Pending Payments:</span>
                   <span className="stat-value">{pendingWithdrawals.length}</span>
                 </div>
@@ -437,16 +449,16 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
         </div>
       )}
 
-      {/* NEW: Payment Approvals Tab */}
+      {/* Payment Approvals Tab */}
       {activeTab === 'payments' && (
-        <div className="tab-content" key="payments-tab">
+        <div className="tab-content">
           <div className="section-header">
             <h2>💰 Payment Approvals</h2>
             <p>Review and approve teacher withdrawal requests</p>
           </div>
 
           {pendingWithdrawals.length === 0 ? (
-            <div className="empty-state" key="empty-payments">
+            <div className="empty-state">
               <div className="empty-icon">✅</div>
               <h3>No Pending Payments</h3>
               <p>All withdrawal requests have been processed.</p>
@@ -467,28 +479,28 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     </div>
                     <div className="payment-amount">
                       <span className="amount">{formatCurrency(withdrawal.amount)}</span>
-                      <span className="status pending">Pending</span>
+                      <span className="status pending">⏳ Pending</span>
                     </div>
                   </div>
 
                   <div className="payment-details">
-                    <div key={`bank-${withdrawal.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Bank Name:</label>
                       <span>{withdrawal.bankDetails?.bankName || 'N/A'}</span>
                     </div>
-                    <div key={`account-${withdrawal.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Account Number:</label>
                       <span>{withdrawal.bankDetails?.accountNumber || 'N/A'}</span>
                     </div>
-                    <div key={`name-${withdrawal.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Account Name:</label>
                       <span>{withdrawal.bankDetails?.accountName || 'N/A'}</span>
                     </div>
-                    <div key={`date-${withdrawal.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Request Date:</label>
                       <span>{formatDate(withdrawal.date)}</span>
                     </div>
-                    <div key={`desc-${withdrawal.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Description:</label>
                       <span>{withdrawal.description}</span>
                     </div>
@@ -516,25 +528,25 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
           )}
 
           {/* Teacher Wallet Summary */}
-          <div className="wallet-summary-section" key="wallet-summary">
+          <div className="wallet-summary-section">
             <h3>📊 Teacher Wallet Summary</h3>
             <div className="wallets-grid">
-              {Object.values(teacherWallets).map(wallet => (
+              {Object.values(teacherWallets || {}).map(wallet => (
                 <div key={wallet.teacherId || `wallet-${wallet.teacherName}`} className="wallet-summary-card">
                   <div className="wallet-header">
                     <h4>{wallet.teacherName}</h4>
                     <span className="wallet-id">ID: {wallet.teacherId}</span>
                   </div>
                   <div className="wallet-balances">
-                    <div key={`balance-${wallet.teacherId}`} className="balance-item">
+                    <div className="balance-item">
                       <span className="label">Available:</span>
                       <span className="value">{formatCurrency(wallet.balance)}</span>
                     </div>
-                    <div key={`earnings-${wallet.teacherId}`} className="balance-item">
+                    <div className="balance-item">
                       <span className="label">Total Earnings:</span>
                       <span className="value">{formatCurrency(wallet.totalEarnings)}</span>
                     </div>
-                    <div key={`pending-${wallet.teacherId}`} className="balance-item">
+                    <div className="balance-item">
                       <span className="label">Pending Withdrawals:</span>
                       <span className="value">{formatCurrency(wallet.pendingWithdrawals)}</span>
                     </div>
@@ -551,54 +563,49 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
         </div>
       )}
 
-      {/* Teacher Management Section */}
-      <div className="management-section" key="management-section">
+      {/* Teacher Management Tabs */}
+      <div className="management-section">
         <div className="section-header">
-          <h2>User Management</h2>
+          <h2>👥 User Management</h2>
           <div className="tab-buttons">
             <button 
-              key="tab-overview"
               className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
               onClick={() => setActiveTab('overview')}
             >
               📊 Overview
             </button>
             <button 
-              key="tab-payments"
               className={`tab-btn ${activeTab === 'payments' ? 'active' : ''}`}
               onClick={() => setActiveTab('payments')}
             >
               💰 Payments ({pendingWithdrawals.length})
             </button>
             <button 
-              key="tab-pending"
               className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
               onClick={() => setActiveTab('pending')}
             >
-              Pending Teachers ({pendingTeachers.length})
+              ⏳ Pending Teachers ({pendingTeachers.length})
             </button>
             <button 
-              key="tab-teachers"
               className={`tab-btn ${activeTab === 'teachers' ? 'active' : ''}`}
               onClick={() => setActiveTab('teachers')}
             >
-              Approved Teachers ({approvedTeachers.length})
+              ✅ Approved Teachers ({approvedTeachers.length})
             </button>
             <button 
-              key="tab-users"
               className={`tab-btn ${activeTab === 'users' ? 'active' : ''}`}
               onClick={() => setActiveTab('users')}
             >
-              All Users ({allUsers.length})
+              👥 All Users ({allUsers.length})
             </button>
           </div>
         </div>
 
         {/* Pending Teachers Tab */}
         {activeTab === 'pending' && (
-          <div className="tab-content" key="pending-tab">
+          <div className="tab-content">
             {pendingTeachers.length === 0 ? (
-              <div className="empty-state" key="empty-pending">
+              <div className="empty-state">
                 <div className="empty-icon">✅</div>
                 <h3>No Pending Requests</h3>
                 <p>All teacher applications have been reviewed.</p>
@@ -606,7 +613,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             ) : (
               <div className="users-grid">
                 {pendingTeachers.map(teacher => (
-                  <div key={teacher.id || teacher.email} className="user-card pending">
+                  <div key={teacher.uid || teacher.id} className="user-card pending">
                     <div className="user-header">
                       <div className="user-avatar">
                         {teacher.name?.charAt(0).toUpperCase() || '?'}
@@ -633,14 +640,14 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     <div className="action-buttons">
                       <button 
                         className="btn-approve"
-                        onClick={() => handleApproveTeacher(teacher.id)}
+                        onClick={() => handleApproveTeacher(teacher.uid || teacher.id)}
                         disabled={loading}
                       >
                         ✅ Approve
                       </button>
                       <button 
                         className="btn-reject"
-                        onClick={() => handleRejectTeacher(teacher.id)}
+                        onClick={() => handleRejectTeacher(teacher.uid || teacher.id)}
                         disabled={loading}
                       >
                         ❌ Reject
@@ -661,9 +668,9 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
         {/* Approved Teachers Tab */}
         {activeTab === 'teachers' && (
-          <div className="tab-content" key="teachers-tab">
+          <div className="tab-content">
             {approvedTeachers.length === 0 ? (
-              <div className="empty-state" key="empty-teachers">
+              <div className="empty-state">
                 <div className="empty-icon">👨‍🏫</div>
                 <h3>No Approved Teachers</h3>
                 <p>Approved teachers will appear here.</p>
@@ -671,7 +678,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
             ) : (
               <div className="users-grid">
                 {approvedTeachers.map(teacher => (
-                  <div key={teacher.id || teacher.email} className="user-card approved">
+                  <div key={teacher.uid || teacher.id} className="user-card approved">
                     <div className="user-header">
                       <div className="user-avatar approved">
                         {teacher.name?.charAt(0).toUpperCase() || '?'}
@@ -704,7 +711,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                     <div className="action-buttons">
                       <button 
                         className="btn-dismiss"
-                        onClick={() => handleDismissTeacher(teacher.id)}
+                        onClick={() => handleDismissTeacher(teacher.uid || teacher.id)}
                         disabled={loading}
                       >
                         🚫 Dismiss
@@ -725,15 +732,15 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
         {/* All Users Tab */}
         {activeTab === 'users' && (
-          <div className="tab-content" key="users-tab">
+          <div className="tab-content">
             {allUsers.length === 0 ? (
-              <div className="empty-state" key="empty-users">
+              <div className="empty-state">
                 <div className="empty-icon">👥</div>
                 <h3>No Users</h3>
                 <p>No users found in the system.</p>
               </div>
             ) : (
-              <div className="users-table-container" key="users-table">
+              <div className="users-table-container">
                 <table className="users-table">
                   <thead>
                     <tr>
@@ -746,7 +753,7 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                   </thead>
                   <tbody>
                     {allUsers.map(user => (
-                      <tr key={user.id || user.email} className="user-row">
+                      <tr key={user.uid || user.id} className="user-row">
                         <td>
                           <div className="user-cell">
                             <div className="user-avatar small">
@@ -758,36 +765,30 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          {getUserRoleBadge(user)}
-                        </td>
+                        <td>{getUserRoleBadge(user)}</td>
                         <td>
                           {user.role === 'teacher' ? (
-                            user.isApproved ? 'Approved' : 'Pending'
+                            user.isApproved ? '✅ Approved' : '⏳ Pending'
                           ) : (
-                            'Active'
+                            '✅ Active'
                           )}
                         </td>
-                        <td>
-                          {formatDate(user.joinedDate)}
-                        </td>
+                        <td>{formatDate(user.joinedDate)}</td>
                         <td>
                           <div className="table-actions">
                             <button 
-                              key={`view-${user.id}`}
                               className="btn-view"
                               onClick={() => handleViewUser(user)}
                             >
-                              View
+                              👁 View
                             </button>
-                            {user.id !== currentUser.id && user.role !== 'admin' && (
+                            {user.uid !== currentUser?.uid && user.role !== 'admin' && (
                               <button 
-                                key={`delete-${user.id}`}
                                 className="btn-delete"
-                                onClick={() => handleDeleteUser(user.id)}
+                                onClick={() => handleDeleteUser(user.uid || user.id)}
                                 disabled={loading}
                               >
-                                Delete
+                                🗑 Delete
                               </button>
                             )}
                           </div>
@@ -804,47 +805,47 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
 
       {/* User Details Modal */}
       {selectedUser && (
-        <div className="modal-overlay" key="user-modal">
+        <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>User Details</h3>
+              <h3>👤 User Details</h3>
               <button className="close-btn" onClick={handleCloseUserDetails}>×</button>
             </div>
             <div className="modal-body">
               <div className="user-detail-section">
-                <div key={`detail-name-${selectedUser.id}`} className="detail-row">
+                <div className="detail-row">
                   <label>Name:</label>
                   <span>{selectedUser.name}</span>
                 </div>
-                <div key={`detail-email-${selectedUser.id}`} className="detail-row">
+                <div className="detail-row">
                   <label>Email:</label>
                   <span>{selectedUser.email}</span>
                 </div>
-                <div key={`detail-role-${selectedUser.id}`} className="detail-row">
+                <div className="detail-row">
                   <label>Role:</label>
                   <span>{getUserRoleBadge(selectedUser)}</span>
                 </div>
-                <div key={`detail-joined-${selectedUser.id}`} className="detail-row">
+                <div className="detail-row">
                   <label>Joined Date:</label>
                   <span>{formatDate(selectedUser.joinedDate)}</span>
                 </div>
                 {selectedUser.role === 'teacher' && (
                   <>
-                    <div key={`detail-spec-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Specialization:</label>
                       <span>{selectedUser.specialization || 'N/A'}</span>
                     </div>
-                    <div key={`detail-status-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Status:</label>
-                      <span>{selectedUser.isApproved ? 'Approved' : 'Pending Approval'}</span>
+                      <span>{selectedUser.isApproved ? '✅ Approved' : '⏳ Pending'}</span>
                     </div>
                     {selectedUser.approvedDate && (
-                      <div key={`detail-approved-${selectedUser.id}`} className="detail-row">
+                      <div className="detail-row">
                         <label>Approved Date:</label>
                         <span>{formatDate(selectedUser.approvedDate)}</span>
                       </div>
                     )}
-                    <div key={`detail-bio-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Bio:</label>
                       <span>{selectedUser.bio || 'No bio provided'}</span>
                     </div>
@@ -852,15 +853,15 @@ const AdminDashboard = ({ currentUser, setCurrentView }) => {
                 )}
                 {selectedUser.role === 'student' && (
                   <>
-                    <div key={`detail-level-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Level:</label>
                       <span>{selectedUser.level || 'Beginner'}</span>
                     </div>
-                    <div key={`detail-points-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Points:</label>
                       <span>{selectedUser.points || 0}</span>
                     </div>
-                    <div key={`detail-courses-${selectedUser.id}`} className="detail-row">
+                    <div className="detail-row">
                       <label>Enrolled Courses:</label>
                       <span>{selectedUser.enrolledCourses?.length || 0}</span>
                     </div>
