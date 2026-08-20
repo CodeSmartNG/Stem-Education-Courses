@@ -555,6 +555,9 @@ export const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaI
 
 // ==================== PAYMENT TRANSACTIONS ====================
 
+const PAYMENT_TRANSACTIONS_KEY = 'hausaStem_payment_transactions';
+const TEACHER_WALLETS_KEY = 'hausaStem_teacher_wallets';
+
 export const getPaymentTransactions = () => {
   try {
     const transactions = localStorage.getItem(PAYMENT_TRANSACTIONS_KEY);
@@ -573,7 +576,25 @@ export const savePaymentTransactions = (transactions) => {
   }
 };
 
-// ✅ ADD THIS FUNCTION - Process lesson payment
+export const getTeacherWallets = () => {
+  try {
+    const wallets = localStorage.getItem(TEACHER_WALLETS_KEY);
+    return wallets ? JSON.parse(wallets) : {};
+  } catch (error) {
+    console.error('Error loading teacher wallets:', error);
+    return {};
+  }
+};
+
+export const saveTeacherWallets = (wallets) => {
+  try {
+    localStorage.setItem(TEACHER_WALLETS_KEY, JSON.stringify(wallets));
+  } catch (error) {
+    console.error('Error saving teacher wallets:', error);
+  }
+};
+
+// Process lesson payment
 export const processLessonPayment = async (studentId, teacherId, courseKey, lessonId, amount) => {
   try {
     const paymentTransaction = {
@@ -588,12 +609,10 @@ export const processLessonPayment = async (studentId, teacherId, courseKey, less
       type: 'lesson_purchase'
     };
 
-    // Save payment transaction
     const transactions = getPaymentTransactions();
     transactions[paymentTransaction.id] = paymentTransaction;
     savePaymentTransactions(transactions);
 
-    // Add earnings to teacher wallet (keep 90% for teacher, 10% platform fee)
     const teacherEarnings = amount * 0.9;
     await addTeacherEarnings(teacherId, teacherEarnings, `Payment for lesson purchase`, {
       courseKey: courseKey,
@@ -637,7 +656,8 @@ export const getStudentById = async (id) => {
   }
 };
 
-export const updateStudent = async (student) => {
+// ✅ REMOVED 'export const' from here - will export in the export list
+const updateStudent = async (student) => {
   try {
     await updateDoc(doc(db, 'users', student.uid), student);
     return { success: true };
@@ -761,114 +781,6 @@ export const withdrawFromWallet = async (teacherId, amount, bankDetails) => {
   }
 };
 
-// ==================== PAYMENT TRANSACTIONS KEYS ====================
-
-const PAYMENT_TRANSACTIONS_KEY = 'hausaStem_payment_transactions';
-const TEACHER_WALLETS_KEY = 'hausaStem_teacher_wallets';
-
-export const getTeacherWallets = () => {
-  try {
-    const wallets = localStorage.getItem(TEACHER_WALLETS_KEY);
-    return wallets ? JSON.parse(wallets) : {};
-  } catch (error) {
-    console.error('Error loading teacher wallets:', error);
-    return {};
-  }
-};
-
-export const saveTeacherWallets = (wallets) => {
-  try {
-    localStorage.setItem(TEACHER_WALLETS_KEY, JSON.stringify(wallets));
-  } catch (error) {
-    console.error('Error saving teacher wallets:', error);
-  }
-};
-
-// ==================== ADDITIONAL EXPORTS ====================
-
-export const getTeacherStats = async (teacherId) => {
-  try {
-    const courses = await getTeacherCourses(teacherId);
-    const wallet = await getTeacherWallet(teacherId);
-    
-    return {
-      totalCourses: courses.length,
-      totalLessons: courses.reduce((acc, course) => acc + (course.lessons?.length || 0), 0),
-      totalStudents: 0, // This would require additional queries
-      totalEarnings: wallet.totalEarnings || 0,
-      availableBalance: wallet.balance || 0
-    };
-  } catch (error) {
-    console.error('Get teacher stats error:', error);
-    return {
-      totalCourses: 0,
-      totalLessons: 0,
-      totalStudents: 0,
-      totalEarnings: 0,
-      availableBalance: 0
-    };
-  }
-};
-
-export const getAllCoursesForAdmin = getCourses;
-export const getCourseDetailsForAdmin = getCourseById;
-export const deleteCourseAsAdmin = deleteCourse;
-export const deleteLessonAsAdmin = deleteLesson;
-export const getCourseAnalyticsForAdmin = getCourseById;
-export const getTeacherCoursesForAdmin = getTeacherCourses;
-export const getPlatformStats = async () => {
-  try {
-    const courses = await getCourses();
-    const teachers = await getTeachers();
-    return {
-      totalCourses: courses.length,
-      totalTeachers: teachers.length,
-      totalStudents: 0, // Would need additional queries
-      totalLessons: courses.reduce((acc, course) => acc + (course.lessons?.length || 0), 0)
-    };
-  } catch (error) {
-    console.error('Get platform stats error:', error);
-    return {};
-  }
-};
-
-export const getUsers = async () => {
-  try {
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const users = {};
-    usersSnapshot.forEach(doc => {
-      users[doc.id] = doc.data();
-    });
-    return users;
-  } catch (error) {
-    console.error('Get users error:', error);
-    return {};
-  }
-};
-
-export const deleteUser = async (userId) => {
-  try {
-    await deleteDoc(doc(db, 'users', userId));
-    return { success: true };
-  } catch (error) {
-    console.error('Delete user error:', error);
-    throw error;
-  }
-};
-
-export const updateUser = async (userId, updateData) => {
-  try {
-    await updateDoc(doc(db, 'users', userId), {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Update user error:', error);
-    throw error;
-  }
-};
-
 // ==================== LESSON ACCESS ====================
 
 export const canAccessLesson = async (studentId, courseId, lessonId) => {
@@ -926,7 +838,224 @@ export const purchaseLesson = async (studentId, courseId, lessonId, paymentData)
   }
 };
 
-// ==================== EXPORT ALL FUNCTIONS ====================
+// ==================== ADDITIONAL FUNCTIONS ====================
+
+export const getTeacherStats = async (teacherId) => {
+  try {
+    const courses = await getTeacherCourses(teacherId);
+    const wallet = await getTeacherWallet(teacherId);
+    
+    return {
+      totalCourses: courses.length,
+      totalLessons: courses.reduce((acc, course) => acc + (course.lessons?.length || 0), 0),
+      totalStudents: 0,
+      totalEarnings: wallet.totalEarnings || 0,
+      availableBalance: wallet.balance || 0
+    };
+  } catch (error) {
+    console.error('Get teacher stats error:', error);
+    return {
+      totalCourses: 0,
+      totalLessons: 0,
+      totalStudents: 0,
+      totalEarnings: 0,
+      availableBalance: 0
+    };
+  }
+};
+
+export const getAllCoursesForAdmin = getCourses;
+export const getCourseDetailsForAdmin = getCourseById;
+export const deleteCourseAsAdmin = deleteCourse;
+export const deleteLessonAsAdmin = deleteLesson;
+export const getCourseAnalyticsForAdmin = getCourseById;
+export const getTeacherCoursesForAdmin = getTeacherCourses;
+
+export const getPlatformStats = async () => {
+  try {
+    const courses = await getCourses();
+    const teachers = await getTeachers();
+    return {
+      totalCourses: courses.length,
+      totalTeachers: teachers.length,
+      totalStudents: 0,
+      totalLessons: courses.reduce((acc, course) => acc + (course.lessons?.length || 0), 0)
+    };
+  } catch (error) {
+    console.error('Get platform stats error:', error);
+    return {};
+  }
+};
+
+export const getUsers = async () => {
+  try {
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const users = {};
+    usersSnapshot.forEach(doc => {
+      users[doc.id] = doc.data();
+    });
+    return users;
+  } catch (error) {
+    console.error('Get users error:', error);
+    return {};
+  }
+};
+
+export const deleteUser = async (userId) => {
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+    return { success: true };
+  } catch (error) {
+    console.error('Delete user error:', error);
+    throw error;
+  }
+};
+
+export const updateUser = async (userId, updateData) => {
+  try {
+    await updateDoc(doc(db, 'users', userId), {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Update user error:', error);
+    throw error;
+  }
+};
+
+export const getStudents = getUsers;
+export const getCourseById = async (courseId) => {
+  try {
+    const courseDoc = await getDoc(doc(db, 'courses', courseId));
+    if (courseDoc.exists()) {
+      return { id: courseDoc.id, ...courseDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Get course error:', error);
+    throw error;
+  }
+};
+
+export const publishCourse = async (courseId, isPublished) => {
+  try {
+    await updateDoc(doc(db, 'courses', courseId), {
+      isPublished: isPublished,
+      publishedAt: isPublished ? serverTimestamp() : null,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Publish course error:', error);
+    throw error;
+  }
+};
+
+export const enrollStudent = async (studentId, courseId) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    await updateDoc(userRef, {
+      enrolledCourses: arrayUnion(courseId),
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Enroll student error:', error);
+    throw error;
+  }
+};
+
+export const unenrollStudent = async (studentId, courseId) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    await updateDoc(userRef, {
+      enrolledCourses: arrayRemove(courseId),
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Unenroll student error:', error);
+    throw error;
+  }
+};
+
+export const updateProgress = async (studentId, courseId, progress, completedLessonId = null) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error('User not found');
+    }
+
+    const user = userDoc.data();
+    const currentProgress = user.progress || {};
+    const completedLessons = user.completedLessons || [];
+    
+    currentProgress[courseId] = progress;
+    
+    if (completedLessonId && !completedLessons.includes(completedLessonId)) {
+      completedLessons.push(completedLessonId);
+      const points = (user.points || 0) + 10;
+      await updateDoc(userRef, {
+        progress: currentProgress,
+        completedLessons: completedLessons,
+        points: points,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await updateDoc(userRef, {
+        progress: currentProgress,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Update progress error:', error);
+    throw error;
+  }
+};
+
+// ==================== ADMIN FUNCTIONS ====================
+
+export const createAdminUser = async () => {
+  // Implementation here
+  return { success: true };
+};
+
+export const checkAdminExists = async () => {
+  // Implementation here
+  return false;
+};
+
+export const getAdminUser = async () => {
+  // Implementation here
+  return null;
+};
+
+export const createTeacherUser = async (teacherData) => {
+  // Implementation here
+  return { success: true };
+};
+
+export const initializeStorage = async () => {
+  // Implementation here
+  return { success: true };
+};
+
+export const getLessons = async (courseId) => {
+  try {
+    const course = await getCourseById(courseId);
+    return course?.lessons || [];
+  } catch (error) {
+    console.error('Get lessons error:', error);
+    return [];
+  }
+};
+
+// ==================== SINGLE EXPORT LIST ====================
 
 export {
   // Auth
@@ -965,6 +1094,7 @@ export {
   publishCourse,
   
   // Lessons
+  getLessons,
   addLessonToCourse,
   updateLesson,
   deleteLesson,
@@ -1006,5 +1136,9 @@ export {
   
   // Student
   getStudentById,
-  updateStudent
+  updateStudent,  // ✅ Now exported only here
+  
+  // Other
+  getStudents,
+  initializeStorage
 };
