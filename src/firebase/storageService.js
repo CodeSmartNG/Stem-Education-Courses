@@ -198,7 +198,170 @@ export const resendVerificationEmail = async () => {
   }
 };
 
+// ==================== ADMIN MANAGEMENT ====================
+
+const createAdminUser = async () => {
+  try {
+    const adminEmail = 'codesmartng1@gmail.com';
+    const adminPassword = 'Kb1217@#$%&';
+    const adminData = {
+      name: 'Kabir Alkasim',
+      role: 'admin',
+      isAdmin: true,
+      isApproved: true
+    };
+
+    try {
+      const result = await loginUser(adminEmail, adminPassword);
+      if (result.success) {
+        console.log('✅ Admin user already exists');
+        return { success: true, message: 'Admin already exists', user: result.user };
+      }
+    } catch (error) {
+      console.log('Admin not found, creating...');
+    }
+
+    const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
+    const user = userCredential.user;
+
+    await updateProfile(user, {
+      displayName: adminData.name
+    });
+
+    const userDoc = {
+      uid: user.uid,
+      name: adminData.name,
+      email: adminEmail,
+      role: 'admin',
+      isAdmin: true,
+      isApproved: true,
+      isEmailVerified: true,
+      joinedDate: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    await setDoc(doc(db, 'users', user.uid), userDoc);
+
+    console.log('✅ Admin user created successfully!');
+    console.log('📧 Email:', adminEmail);
+    console.log('🔑 Password:', adminPassword);
+    
+    return { success: true, user: userDoc };
+  } catch (error) {
+    console.error('Error creating admin user:', error);
+    if (error.code === 'auth/email-already-in-use') {
+      return { success: false, message: 'Admin user already exists' };
+    }
+    throw error;
+  }
+};
+
+const checkAdminExists = async () => {
+  try {
+    const adminEmail = 'codesmartng1@gmail.com';
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    let adminExists = false;
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.email === adminEmail && data.role === 'admin') {
+        adminExists = true;
+      }
+    });
+    return adminExists;
+  } catch (error) {
+    console.error('Error checking admin:', error);
+    return false;
+  }
+};
+
+const getAdminUser = async () => {
+  try {
+    const adminEmail = 'codesmartng1@gmail.com';
+    const q = query(collection(db, 'users'), where('email', '==', adminEmail), where('role', '==', 'admin'));
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting admin:', error);
+    return null;
+  }
+};
+
 // ==================== TEACHER MANAGEMENT ====================
+
+const createTeacherUser = async (teacherData) => {
+  try {
+    const { email, password, name, specialization, bio, whatsappNumber } = teacherData;
+
+    try {
+      const result = await loginUser(email, password);
+      if (result.success) {
+        console.log('✅ Teacher user already exists');
+        return { success: true, message: 'Teacher already exists', user: result.user };
+      }
+    } catch (error) {
+      console.log('Teacher not found, creating...');
+    }
+
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    const user = userCredential.user;
+
+    await updateProfile(user, {
+      displayName: name
+    });
+
+    await sendEmailVerification(user);
+
+    const userDoc = {
+      uid: user.uid,
+      name: name,
+      email: email,
+      role: 'teacher',
+      isAdmin: false,
+      isApproved: false,
+      isEmailVerified: false,
+      specialization: specialization || 'General',
+      bio: bio || '',
+      whatsappNumber: whatsappNumber || '',
+      profileImage: '',
+      courses: [],
+      earnings: 0,
+      joinedDate: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+
+    await setDoc(doc(db, 'users', user.uid), userDoc);
+
+    const walletData = {
+      teacherId: user.uid,
+      balance: 0,
+      totalEarnings: 0,
+      pendingWithdrawals: 0,
+      transactions: [],
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    await setDoc(doc(db, 'wallets', user.uid), walletData);
+
+    console.log('✅ Teacher user created successfully!');
+    console.log('📧 Email:', email);
+    console.log('🔑 Password:', password);
+    console.log('⚠️ Account needs admin approval before login');
+
+    return { success: true, user: userDoc, uid: user.uid };
+  } catch (error) {
+    console.error('Error creating teacher user:', error);
+    if (error.code === 'auth/email-already-in-use') {
+      return { success: false, message: 'Teacher user already exists' };
+    }
+    throw error;
+  }
+};
 
 export const getTeacherWhatsAppUrl = async (teacherId) => {
   try {
@@ -328,7 +491,7 @@ export const getApprovedTeachers = async () => {
 
 // ==================== COURSE MANAGEMENT ====================
 
-export const getCourses = async () => {
+const getCourses = async () => {
   try {
     const coursesSnapshot = await getDocs(collection(db, 'courses'));
     const courses = [];
@@ -338,7 +501,7 @@ export const getCourses = async () => {
     return courses;
   } catch (error) {
     console.error('Get courses error:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -400,7 +563,44 @@ export const deleteCourse = async (courseId) => {
   }
 };
 
+const getCourseById = async (courseId) => {
+  try {
+    const courseDoc = await getDoc(doc(db, 'courses', courseId));
+    if (courseDoc.exists()) {
+      return { id: courseDoc.id, ...courseDoc.data() };
+    }
+    return null;
+  } catch (error) {
+    console.error('Get course error:', error);
+    throw error;
+  }
+};
+
+const publishCourse = async (courseId, isPublished) => {
+  try {
+    await updateDoc(doc(db, 'courses', courseId), {
+      isPublished: isPublished,
+      publishedAt: isPublished ? serverTimestamp() : null,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Publish course error:', error);
+    throw error;
+  }
+};
+
 // ==================== LESSON MANAGEMENT ====================
+
+const getLessons = async (courseId) => {
+  try {
+    const course = await getCourseById(courseId);
+    return course?.lessons || [];
+  } catch (error) {
+    console.error('Get lessons error:', error);
+    return [];
+  }
+};
 
 export const addLessonToCourse = async (courseId, lessonData) => {
   try {
@@ -527,7 +727,8 @@ export const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) 
   }
 };
 
-export const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaId) => {
+// ✅ REMOVED 'export const' from here
+const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
     const courseDoc = await getDoc(courseRef);
@@ -553,12 +754,137 @@ export const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaI
   }
 };
 
-// ==================== PAYMENT TRANSACTIONS ====================
+// ==================== ENROLLMENT ====================
+
+const enrollStudent = async (studentId, courseId) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    await updateDoc(userRef, {
+      enrolledCourses: arrayUnion(courseId),
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Enroll student error:', error);
+    throw error;
+  }
+};
+
+const unenrollStudent = async (studentId, courseId) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    await updateDoc(userRef, {
+      enrolledCourses: arrayRemove(courseId),
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Unenroll student error:', error);
+    throw error;
+  }
+};
+
+const updateProgress = async (studentId, courseId, progress, completedLessonId = null) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error('User not found');
+    }
+
+    const user = userDoc.data();
+    const currentProgress = user.progress || {};
+    const completedLessons = user.completedLessons || [];
+    
+    currentProgress[courseId] = progress;
+    
+    if (completedLessonId && !completedLessons.includes(completedLessonId)) {
+      completedLessons.push(completedLessonId);
+      const points = (user.points || 0) + 10;
+      await updateDoc(userRef, {
+        progress: currentProgress,
+        completedLessons: completedLessons,
+        points: points,
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      await updateDoc(userRef, {
+        progress: currentProgress,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Update progress error:', error);
+    throw error;
+  }
+};
+
+// ==================== LESSON PURCHASE ====================
+
+const purchaseLesson = async (studentId, courseId, lessonId, paymentData) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error('User not found');
+    }
+
+    const user = userDoc.data();
+    const purchasedLessons = user.purchasedLessons || [];
+    const purchaseKey = `${courseId}_${lessonId}`;
+    
+    if (!purchasedLessons.includes(purchaseKey)) {
+      purchasedLessons.push(purchaseKey);
+      
+      const paymentHistory = user.paymentHistory || [];
+      paymentHistory.push({
+        paymentId: paymentData?.paymentId || `pay_${Date.now()}`,
+        amount: paymentData?.amount || 0,
+        lessonId: lessonId,
+        courseId: courseId,
+        gateway: paymentData?.gateway || 'manual',
+        timestamp: serverTimestamp(),
+        status: 'completed'
+      });
+
+      await updateDoc(userRef, {
+        purchasedLessons: purchasedLessons,
+        paymentHistory: paymentHistory,
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Purchase lesson error:', error);
+    throw error;
+  }
+};
+
+const canAccessLesson = async (studentId, courseId, lessonId) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', studentId));
+    if (!userDoc.exists()) return false;
+    
+    const user = userDoc.data();
+    const purchaseKey = `${courseId}_${lessonId}`;
+    return user.purchasedLessons?.includes(purchaseKey) || false;
+  } catch (error) {
+    console.error('Check access error:', error);
+    return false;
+  }
+};
+
+// ==================== TEACHER WALLET ====================
 
 const PAYMENT_TRANSACTIONS_KEY = 'hausaStem_payment_transactions';
 const TEACHER_WALLETS_KEY = 'hausaStem_teacher_wallets';
 
-export const getPaymentTransactions = () => {
+const getPaymentTransactions = () => {
   try {
     const transactions = localStorage.getItem(PAYMENT_TRANSACTIONS_KEY);
     return transactions ? JSON.parse(transactions) : {};
@@ -568,7 +894,7 @@ export const getPaymentTransactions = () => {
   }
 };
 
-export const savePaymentTransactions = (transactions) => {
+const savePaymentTransactions = (transactions) => {
   try {
     localStorage.setItem(PAYMENT_TRANSACTIONS_KEY, JSON.stringify(transactions));
   } catch (error) {
@@ -576,7 +902,7 @@ export const savePaymentTransactions = (transactions) => {
   }
 };
 
-export const getTeacherWallets = () => {
+const getTeacherWallets = () => {
   try {
     const wallets = localStorage.getItem(TEACHER_WALLETS_KEY);
     return wallets ? JSON.parse(wallets) : {};
@@ -586,7 +912,7 @@ export const getTeacherWallets = () => {
   }
 };
 
-export const saveTeacherWallets = (wallets) => {
+const saveTeacherWallets = (wallets) => {
   try {
     localStorage.setItem(TEACHER_WALLETS_KEY, JSON.stringify(wallets));
   } catch (error) {
@@ -594,8 +920,7 @@ export const saveTeacherWallets = (wallets) => {
   }
 };
 
-// Process lesson payment
-export const processLessonPayment = async (studentId, teacherId, courseKey, lessonId, amount) => {
+const processLessonPayment = async (studentId, teacherId, courseKey, lessonId, amount) => {
   try {
     const paymentTransaction = {
       id: `pay_${Date.now()}`,
@@ -620,7 +945,6 @@ export const processLessonPayment = async (studentId, teacherId, courseKey, less
       studentId: studentId
     });
 
-    // Update student's purchased lessons
     const student = await getStudentById(studentId);
     if (student) {
       if (!student.purchasedLessons) {
@@ -641,35 +965,7 @@ export const processLessonPayment = async (studentId, teacherId, courseKey, less
   }
 };
 
-// ==================== STUDENT MANAGEMENT ====================
-
-export const getStudentById = async (id) => {
-  try {
-    const userDoc = await getDoc(doc(db, 'users', id));
-    if (userDoc.exists()) {
-      return userDoc.data();
-    }
-    return null;
-  } catch (error) {
-    console.error('Get student error:', error);
-    return null;
-  }
-};
-
-// ✅ REMOVED 'export const' from here - will export in the export list
-const updateStudent = async (student) => {
-  try {
-    await updateDoc(doc(db, 'users', student.uid), student);
-    return { success: true };
-  } catch (error) {
-    console.error('Update student error:', error);
-    throw error;
-  }
-};
-
-// ==================== TEACHER WALLET ====================
-
-export const getTeacherWallet = async (teacherId) => {
+const getTeacherWallet = async (teacherId) => {
   try {
     const walletDoc = await getDoc(doc(db, 'wallets', teacherId));
     if (walletDoc.exists()) {
@@ -692,7 +988,7 @@ export const getTeacherWallet = async (teacherId) => {
   }
 };
 
-export const addTeacherEarnings = async (teacherId, amount, description, lessonDetails = {}) => {
+const addTeacherEarnings = async (teacherId, amount, description, lessonDetails = {}) => {
   try {
     const walletRef = doc(db, 'wallets', teacherId);
     const walletDoc = await getDoc(walletRef);
@@ -736,7 +1032,7 @@ export const addTeacherEarnings = async (teacherId, amount, description, lessonD
   }
 };
 
-export const withdrawFromWallet = async (teacherId, amount, bankDetails) => {
+const withdrawFromWallet = async (teacherId, amount, bankDetails) => {
   try {
     const walletRef = doc(db, 'wallets', teacherId);
     const walletDoc = await getDoc(walletRef);
@@ -781,66 +1077,88 @@ export const withdrawFromWallet = async (teacherId, amount, bankDetails) => {
   }
 };
 
-// ==================== LESSON ACCESS ====================
+// ==================== STUDENT MANAGEMENT ====================
 
-export const canAccessLesson = async (studentId, courseId, lessonId) => {
+const getStudentById = async (id) => {
   try {
-    const userDoc = await getDoc(doc(db, 'users', studentId));
-    if (!userDoc.exists()) return false;
-    
-    const user = userDoc.data();
-    const purchaseKey = `${courseId}_${lessonId}`;
-    return user.purchasedLessons?.includes(purchaseKey) || false;
+    const userDoc = await getDoc(doc(db, 'users', id));
+    if (userDoc.exists()) {
+      return userDoc.data();
+    }
+    return null;
   } catch (error) {
-    console.error('Check access error:', error);
-    return false;
+    console.error('Get student error:', error);
+    return null;
   }
 };
 
-export const purchaseLesson = async (studentId, courseId, lessonId, paymentData) => {
+const updateStudent = async (student) => {
   try {
-    const userRef = doc(db, 'users', studentId);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      throw new Error('User not found');
-    }
-
-    const user = userDoc.data();
-    const purchasedLessons = user.purchasedLessons || [];
-    const purchaseKey = `${courseId}_${lessonId}`;
-    
-    if (!purchasedLessons.includes(purchaseKey)) {
-      purchasedLessons.push(purchaseKey);
-      
-      const paymentHistory = user.paymentHistory || [];
-      paymentHistory.push({
-        paymentId: paymentData?.paymentId || `pay_${Date.now()}`,
-        amount: paymentData?.amount || 0,
-        lessonId: lessonId,
-        courseId: courseId,
-        gateway: paymentData?.gateway || 'manual',
-        timestamp: serverTimestamp(),
-        status: 'completed'
-      });
-
-      await updateDoc(userRef, {
-        purchasedLessons: purchasedLessons,
-        paymentHistory: paymentHistory,
-        updatedAt: serverTimestamp()
-      });
-    }
-
+    await updateDoc(doc(db, 'users', student.uid), student);
     return { success: true };
   } catch (error) {
-    console.error('Purchase lesson error:', error);
+    console.error('Update student error:', error);
     throw error;
   }
 };
 
-// ==================== ADDITIONAL FUNCTIONS ====================
+const getStudents = async () => {
+  try {
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const students = [];
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      if (data.role === 'student') {
+        students.push({ id: doc.id, ...data });
+      }
+    });
+    return students;
+  } catch (error) {
+    console.error('Get students error:', error);
+    return [];
+  }
+};
 
-export const getTeacherStats = async (teacherId) => {
+const getUsers = async () => {
+  try {
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const users = {};
+    usersSnapshot.forEach(doc => {
+      users[doc.id] = doc.data();
+    });
+    return users;
+  } catch (error) {
+    console.error('Get users error:', error);
+    return {};
+  }
+};
+
+const deleteUser = async (userId) => {
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+    return { success: true };
+  } catch (error) {
+    console.error('Delete user error:', error);
+    throw error;
+  }
+};
+
+const updateUser = async (userId, updateData) => {
+  try {
+    await updateDoc(doc(db, 'users', userId), {
+      ...updateData,
+      updatedAt: serverTimestamp()
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('Update user error:', error);
+    throw error;
+  }
+};
+
+// ==================== ADMIN FUNCTIONS ====================
+
+const getTeacherStats = async (teacherId) => {
   try {
     const courses = await getTeacherCourses(teacherId);
     const wallet = await getTeacherWallet(teacherId);
@@ -864,14 +1182,14 @@ export const getTeacherStats = async (teacherId) => {
   }
 };
 
-export const getAllCoursesForAdmin = getCourses;
-export const getCourseDetailsForAdmin = getCourseById;
-export const deleteCourseAsAdmin = deleteCourse;
-export const deleteLessonAsAdmin = deleteLesson;
-export const getCourseAnalyticsForAdmin = getCourseById;
-export const getTeacherCoursesForAdmin = getTeacherCourses;
+const getAllCoursesForAdmin = getCourses;
+const getCourseDetailsForAdmin = getCourseById;
+const deleteCourseAsAdmin = deleteCourse;
+const deleteLessonAsAdmin = deleteLesson;
+const getCourseAnalyticsForAdmin = getCourseById;
+const getTeacherCoursesForAdmin = getTeacherCourses;
 
-export const getPlatformStats = async () => {
+const getPlatformStats = async () => {
   try {
     const courses = await getCourses();
     const teachers = await getTeachers();
@@ -887,171 +1205,13 @@ export const getPlatformStats = async () => {
   }
 };
 
-export const getUsers = async () => {
+const initializeStorage = async () => {
   try {
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    const users = {};
-    usersSnapshot.forEach(doc => {
-      users[doc.id] = doc.data();
-    });
-    return users;
-  } catch (error) {
-    console.error('Get users error:', error);
-    return {};
-  }
-};
-
-export const deleteUser = async (userId) => {
-  try {
-    await deleteDoc(doc(db, 'users', userId));
+    console.log('🔄 Initializing Firebase Storage...');
     return { success: true };
   } catch (error) {
-    console.error('Delete user error:', error);
-    throw error;
-  }
-};
-
-export const updateUser = async (userId, updateData) => {
-  try {
-    await updateDoc(doc(db, 'users', userId), {
-      ...updateData,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Update user error:', error);
-    throw error;
-  }
-};
-
-export const getStudents = getUsers;
-export const getCourseById = async (courseId) => {
-  try {
-    const courseDoc = await getDoc(doc(db, 'courses', courseId));
-    if (courseDoc.exists()) {
-      return { id: courseDoc.id, ...courseDoc.data() };
-    }
-    return null;
-  } catch (error) {
-    console.error('Get course error:', error);
-    throw error;
-  }
-};
-
-export const publishCourse = async (courseId, isPublished) => {
-  try {
-    await updateDoc(doc(db, 'courses', courseId), {
-      isPublished: isPublished,
-      publishedAt: isPublished ? serverTimestamp() : null,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Publish course error:', error);
-    throw error;
-  }
-};
-
-export const enrollStudent = async (studentId, courseId) => {
-  try {
-    const userRef = doc(db, 'users', studentId);
-    await updateDoc(userRef, {
-      enrolledCourses: arrayUnion(courseId),
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Enroll student error:', error);
-    throw error;
-  }
-};
-
-export const unenrollStudent = async (studentId, courseId) => {
-  try {
-    const userRef = doc(db, 'users', studentId);
-    await updateDoc(userRef, {
-      enrolledCourses: arrayRemove(courseId),
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Unenroll student error:', error);
-    throw error;
-  }
-};
-
-export const updateProgress = async (studentId, courseId, progress, completedLessonId = null) => {
-  try {
-    const userRef = doc(db, 'users', studentId);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      throw new Error('User not found');
-    }
-
-    const user = userDoc.data();
-    const currentProgress = user.progress || {};
-    const completedLessons = user.completedLessons || [];
-    
-    currentProgress[courseId] = progress;
-    
-    if (completedLessonId && !completedLessons.includes(completedLessonId)) {
-      completedLessons.push(completedLessonId);
-      const points = (user.points || 0) + 10;
-      await updateDoc(userRef, {
-        progress: currentProgress,
-        completedLessons: completedLessons,
-        points: points,
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      await updateDoc(userRef, {
-        progress: currentProgress,
-        updatedAt: serverTimestamp()
-      });
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Update progress error:', error);
-    throw error;
-  }
-};
-
-// ==================== ADMIN FUNCTIONS ====================
-
-export const createAdminUser = async () => {
-  // Implementation here
-  return { success: true };
-};
-
-export const checkAdminExists = async () => {
-  // Implementation here
-  return false;
-};
-
-export const getAdminUser = async () => {
-  // Implementation here
-  return null;
-};
-
-export const createTeacherUser = async (teacherData) => {
-  // Implementation here
-  return { success: true };
-};
-
-export const initializeStorage = async () => {
-  // Implementation here
-  return { success: true };
-};
-
-export const getLessons = async (courseId) => {
-  try {
-    const course = await getCourseById(courseId);
-    return course?.lessons || [];
-  } catch (error) {
-    console.error('Get lessons error:', error);
-    return [];
+    console.error('Error initializing storage:', error);
+    return { success: false, error: error.message };
   }
 };
 
@@ -1099,7 +1259,7 @@ export {
   updateLesson,
   deleteLesson,
   addMultimediaToLesson,
-  deleteMultimediaFromLesson,
+  deleteMultimediaFromLesson, // ✅ Only exported here
   
   // Enrollment
   enrollStudent,
@@ -1136,7 +1296,7 @@ export {
   
   // Student
   getStudentById,
-  updateStudent,  // ✅ Now exported only here
+  updateStudent,
   
   // Other
   getStudents,
