@@ -667,7 +667,8 @@ export const updateLesson = async (courseId, lessonId, updateData) => {
   }
 };
 
-export const deleteLesson = async (courseId, lessonId) => {
+// ✅ REMOVED 'export const' from here
+const deleteLesson = async (courseId, lessonId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
     const courseDoc = await getDoc(courseRef);
@@ -692,7 +693,8 @@ export const deleteLesson = async (courseId, lessonId) => {
   }
 };
 
-export const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
+// ✅ REMOVED 'export const' from here
+const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
     const courseDoc = await getDoc(courseRef);
@@ -1257,9 +1259,9 @@ export {
   getLessons,
   addLessonToCourse,
   updateLesson,
-  deleteLesson,
+  deleteLesson, // ✅ Only exported here
   addMultimediaToLesson,
-  deleteMultimediaFromLesson, // ✅ Only exported here
+  deleteMultimediaFromLesson,
   
   // Enrollment
   enrollStudent,
