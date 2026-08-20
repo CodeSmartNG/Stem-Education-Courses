@@ -3,11 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": ".",
+  "homepage": "https://martng.github.io",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --fix",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "vite build && gh-pages -d dist"
