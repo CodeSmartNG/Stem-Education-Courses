@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { resendVerificationEmail, getCurrentUser } from '../firebase/storageService';
 import './EmailConfirmation.css';
 
 const EmailConfirmation = ({ 
@@ -11,25 +12,85 @@ const EmailConfirmation = ({
   const [manualToken, setManualToken] = useState(token || '');
   const [isResending, setIsResending] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [error, setError] = useState('');
 
-  const handleManualConfirm = () => {
-    if (manualToken.trim()) {
-      onConfirm(manualToken.trim());
+  // Handle countdown timer for resend button
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  // Auto-confirm if token is provided
+  useEffect(() => {
+    if (token) {
+      setManualToken(token);
+    }
+  }, [token]);
+
+  const handleManualConfirm = async () => {
+    if (!manualToken.trim()) {
+      setError('Please enter a confirmation token');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      await onConfirm(manualToken.trim());
+    } catch (error) {
+      console.error('Confirmation error:', error);
+      setError(error.message || 'Failed to confirm email. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleResend = async () => {
+    if (countdown > 0) return;
+    
     setIsResending(true);
     setResendMessage('');
+    setError('');
     
     try {
-      await onResend();
-      setResendMessage('Confirmation email sent successfully!');
+      // Try using Firebase's built-in resend
+      if (onResend) {
+        await onResend();
+      } else {
+        // Fallback to Firebase's resendVerificationEmail
+        const currentUser = getCurrentUser();
+        if (currentUser && !currentUser.isEmailVerified) {
+          await resendVerificationEmail();
+        } else {
+          throw new Error('Unable to resend verification email. Please try again later.');
+        }
+      }
+      
+      setResendMessage('✅ Confirmation email sent successfully! Please check your inbox and spam folder.');
+      setCountdown(60); // Disable button for 60 seconds
     } catch (error) {
-      setResendMessage('Failed to resend email. Please try again.');
+      console.error('Resend error:', error);
+      setResendMessage('❌ Failed to resend email. Please try again later.');
     } finally {
       setIsResending(false);
     }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && manualToken.trim()) {
+      handleManualConfirm();
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   };
 
   return (
@@ -47,47 +108,72 @@ const EmailConfirmation = ({
           <p className="confirmation-email">{email}</p>
           
           <div className="confirmation-steps">
-            <h3>To complete your registration:</h3>
+            <h3>📋 To complete your registration:</h3>
             <ol>
-              <li>Check your email inbox (and spam folder)</li>
-              <li>Click the confirmation link in the email</li>
-              <li>Return here to log in</li>
+              <li>📥 Check your email inbox (and spam folder)</li>
+              <li>🔗 Click the confirmation link in the email</li>
+              <li>✅ Return here to log in</li>
             </ol>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="error-message">
+              <span className="error-icon">❌</span>
+              <span className="error-text">{error}</span>
+              <button className="error-close" onClick={() => setError('')}>×</button>
+            </div>
+          )}
+
           {/* Manual Token Entry for Demo/Testing */}
           <div className="manual-confirmation">
-            <h4>Demo / Manual Confirmation</h4>
+            <h4>🔑 Manual Confirmation</h4>
             <p className="demo-note">
-              For testing purposes, you can manually enter a confirmation token below:
+              Enter your confirmation token below:
             </p>
             <div className="token-input-group">
               <input
                 type="text"
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
+                onKeyPress={handleKeyPress}
                 placeholder="Enter confirmation token"
                 className="token-input"
+                disabled={isLoading}
               />
               <button
                 onClick={handleManualConfirm}
-                disabled={!manualToken.trim()}
+                disabled={!manualToken.trim() || isLoading}
                 className="confirm-token-btn"
               >
-                Confirm Email
+                {isLoading ? 'Confirming...' : 'Confirm Email'}
               </button>
             </div>
+            {token && (
+              <p className="token-hint">
+                💡 Token: <span className="token-display">{token}</span>
+              </p>
+            )}
           </div>
 
           {/* Resend Email Section */}
           <div className="resend-section">
-            <p>Didn't receive the email?</p>
+            <p className="resend-question">Didn't receive the email?</p>
             <button
               onClick={handleResend}
-              disabled={isResending}
+              disabled={isResending || countdown > 0}
               className="resend-btn"
             >
-              {isResending ? 'Sending...' : 'Resend Confirmation Email'}
+              {isResending ? (
+                <>
+                  <span className="spinner"></span>
+                  Sending...
+                </>
+              ) : countdown > 0 ? (
+                `Resend in ${formatTime(countdown)}`
+              ) : (
+                '📤 Resend Confirmation Email'
+              )}
             </button>
             {resendMessage && (
               <p className={`resend-message ${resendMessage.includes('success') ? 'success' : 'error'}`}>
@@ -98,12 +184,12 @@ const EmailConfirmation = ({
 
           {/* Help Tips */}
           <div className="help-tips">
-            <h4>Having trouble?</h4>
+            <h4>💡 Having trouble?</h4>
             <ul>
-              <li>Check your spam or junk folder</li>
-              <li>Make sure you entered the correct email address</li>
-              <li>Wait a few minutes - emails can take time to arrive</li>
-              <li>Contact support if you continue having issues</li>
+              <li>📂 Check your spam or junk folder</li>
+              <li>📧 Make sure you entered the correct email address</li>
+              <li>⏳ Wait a few minutes - emails can take time to arrive</li>
+              <li>📱 Contact support if you continue having issues</li>
             </ul>
           </div>
         </div>
@@ -112,25 +198,30 @@ const EmailConfirmation = ({
           <button
             onClick={onCancel}
             className="cancel-btn"
+            disabled={isLoading}
           >
-            Back to Login
+            ← Back to Login
           </button>
         </div>
 
         {/* Demo Information */}
         <div className="demo-info">
           <details>
-            <summary>Demo Information</summary>
+            <summary>ℹ️ Demo Information</summary>
             <div className="demo-content">
               <p>
                 <strong>How this works in demo mode:</strong>
               </p>
               <ul>
-                <li>Confirmation tokens are stored in browser storage</li>
-                <li>No actual emails are sent in this demo</li>
-                <li>Use the manual confirmation above with the token shown during registration</li>
-                <li>In a real application, users would receive actual email links</li>
+                <li>🔑 Confirmation tokens are stored in Firebase</li>
+                <li>📧 Firebase sends actual verification emails</li>
+                <li>🔄 Use the "Resend" button to get a new email</li>
+                <li>✅ Check your spam folder if you don't see the email</li>
               </ul>
+              <p className="demo-note">
+                <strong>Note:</strong> In production, Firebase handles email verification automatically.
+                The manual token entry is provided for testing purposes.
+              </p>
             </div>
           </details>
         </div>
