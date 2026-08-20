@@ -1102,4 +1102,565 @@ const TeacherDashboard = () => {
                 />
               </div>
               <div className="form-group">
-                <
+                <label>Thumbnail Emoji</label>
+                <input
+                  type="text"
+                  value={newCourseForm.thumbnail}
+                  onChange={(e) => setNewCourseForm({...newCourseForm, thumbnail: e.target.value})}
+                  placeholder="🌐"
+                />
+              </div>
+              <div className="form-group">
+                <label>Course Key (auto-generated if empty)</label>
+                <input
+                  type="text"
+                  value={newCourseForm.key}
+                  onChange={(e) => setNewCourseForm({...newCourseForm, key: e.target.value})}
+                  placeholder="webDevelopment"
+                />
+              </div>
+              <button type="submit" className="submit-btn">Add Course</button>
+            </form>
+          </div>
+        )}
+
+        {/* Add Lesson Tab */}
+        {activeTab === 'add-lesson' && (
+          <div className="add-lesson-tab">
+            <h3>Add New Lesson</h3>
+            <form onSubmit={handleAddLesson} className="teacher-form">
+              <div className="form-group">
+                <label>Select Course</label>
+                <select
+                  value={newLessonForm.courseKey}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, courseKey: e.target.value})}
+                  required
+                >
+                  <option value="">Choose a course</option>
+                  {Object.entries(courses).map(([key, course]) => (
+                    <option key={key} value={key}>{course.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Lesson Title</label>
+                <input
+                  type="text"
+                  value={newLessonForm.title}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, title: e.target.value})}
+                  required
+                />
+              </div>
+
+              {/* Video Upload Section */}
+              <div className="video-upload-section">
+                <h4>📹 Video Content</h4>
+                
+                <div className="video-source-selector">
+                  <label className="video-source-option">
+                    <input
+                      type="radio"
+                      name="videoSource"
+                      checked={newLessonForm.videoSource === 'upload'}
+                      onChange={() => setNewLessonForm(prev => ({...prev, videoSource: 'upload', videoUrl: ''}))}
+                    />
+                    <span className="option-label">📤 Upload Video from Device</span>
+                  </label>
+                  <label className="video-source-option">
+                    <input
+                      type="radio"
+                      name="videoSource"
+                      checked={newLessonForm.videoSource === 'youtube'}
+                      onChange={() => setNewLessonForm(prev => ({...prev, videoSource: 'youtube', videoFile: null}))}
+                    />
+                    <span className="option-label">🔗 YouTube Link</span>
+                  </label>
+                </div>
+
+                {/* Upload Video Option */}
+                {newLessonForm.videoSource === 'upload' && (
+                  <div className="upload-video-section">
+                    <div className="file-upload-area">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="video/*"
+                        onChange={handleVideoFileSelect}
+                        className="file-input"
+                        id="video-upload"
+                      />
+                      <label htmlFor="video-upload" className="file-upload-label">
+                        <span className="upload-icon">📤</span>
+                        <span className="upload-text">
+                          {selectedVideoFile ? selectedVideoFile.name : 'Choose a video file'}
+                        </span>
+                        <span className="upload-hint">MP4, WebM, OGG, MOV, AVI (Max 100MB)</span>
+                      </label>
+                    </div>
+
+                    {selectedVideoFile && (
+                      <div className="video-file-info">
+                        <span className="file-name">📹 {selectedVideoFile.name}</span>
+                        <span className="file-size">Size: {(selectedVideoFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                        <span className="file-type">Type: {selectedVideoFile.type}</span>
+                      </div>
+                    )}
+
+                    {videoFilePreview && (
+                      <div className="video-preview-container">
+                        <video 
+                          src={videoFilePreview} 
+                          controls 
+                          className="video-preview-player"
+                          style={{ maxWidth: '100%', maxHeight: '300px' }}
+                        />
+                        <button 
+                          type="button" 
+                          className="remove-video-btn"
+                          onClick={() => {
+                            setSelectedVideoFile(null);
+                            setVideoFilePreview(null);
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                            setNewLessonForm(prev => ({...prev, videoFile: null, videoTitle: ''}));
+                          }}
+                        >
+                          Remove Video
+                        </button>
+                      </div>
+                    )}
+
+                    {isUploading && (
+                      <div className="upload-progress-container">
+                        <div className="upload-progress-bar">
+                          <div 
+                            className="upload-progress-fill" 
+                            style={{ width: `${uploadProgress}%` }}
+                          >
+                            {uploadProgress}%
+                          </div>
+                        </div>
+                        <span className="upload-progress-text">Uploading video... {uploadProgress}%</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* YouTube Link Option */}
+                {newLessonForm.videoSource === 'youtube' && (
+                  <div className="youtube-section">
+                    <div className="form-group">
+                      <label>YouTube URL</label>
+                      <input
+                        type="url"
+                        value={newLessonForm.videoUrl || ''}
+                        onChange={(e) => setNewLessonForm({...newLessonForm, videoUrl: e.target.value})}
+                        placeholder="https://www.youtube.com/watch?v=VIDEO_ID"
+                      />
+                      <small>Supports youtube.com/watch, youtu.be, and embed links</small>
+                    </div>
+
+                    {newLessonForm.videoUrl && isValidYouTubeUrl(newLessonForm.videoUrl) && (
+                      <div className="youtube-preview">
+                        <h5>Preview:</h5>
+                        <iframe
+                          src={getYouTubeEmbedUrl(newLessonForm.videoUrl)}
+                          title="YouTube Preview"
+                          width="100%"
+                          height="250"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {newLessonForm.videoSource !== 'upload' && newLessonForm.videoSource !== 'youtube' && (
+                  <p className="video-hint">Select a video source above to add video content to your lesson.</p>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label>Video Title</label>
+                <input
+                  type="text"
+                  value={newLessonForm.videoTitle}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, videoTitle: e.target.value})}
+                  placeholder="Lesson Video Tutorial"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Video Description</label>
+                <input
+                  type="text"
+                  value={newLessonForm.videoDescription}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, videoDescription: e.target.value})}
+                  placeholder="Watch this video to learn more"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Lesson Content</label>
+                <textarea
+                  value={newLessonForm.content}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, content: e.target.value})}
+                  required
+                  rows="4"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Duration</label>
+                <input
+                  type="text"
+                  value={newLessonForm.duration}
+                  onChange={(e) => setNewLessonForm({...newLessonForm, duration: e.target.value})}
+                  placeholder="30 minutes"
+                  required
+                />
+              </div>
+
+              {/* Pricing Section */}
+              <div className="pricing-section">
+                <h4>💰 Lesson Pricing</h4>
+                <div className="pricing-options">
+                  <label className="pricing-option">
+                    <input
+                      type="radio"
+                      name="lessonType"
+                      checked={newLessonForm.isFree}
+                      onChange={() => setNewLessonForm({...newLessonForm, isFree: true, price: 0})}
+                    />
+                    <span className="option-label">Free Lesson</span>
+                    <span className="option-description">Students can access for free</span>
+                  </label>
+
+                  <label className="pricing-option">
+                    <input
+                      type="radio"
+                      name="lessonType"
+                      checked={!newLessonForm.isFree}
+                      onChange={() => setNewLessonForm({...newLessonForm, isFree: false, price: 500})}
+                    />
+                    <span className="option-label">Paid Lesson</span>
+                    <span className="option-description">Students pay to access</span>
+                  </label>
+                </div>
+
+                {!newLessonForm.isFree && (
+                  <div className="price-input">
+                    <div className="form-group">
+                      <label>Lesson Price (₦)</label>
+                      <input
+                        type="number"
+                        value={newLessonForm.price}
+                        onChange={(e) => setNewLessonForm({...newLessonForm, price: parseInt(e.target.value) || 0})}
+                        min="100"
+                        max="10000"
+                        required
+                      />
+                      <small>Price between ₦100 - ₦10,000</small>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Quiz Section */}
+              <div className="quiz-section">
+                <div className="section-header">
+                  <h4>📝 Quiz Content (Optional)</h4>
+                  <button 
+                    type="button"
+                    onClick={() => setShowQuizForm(!showQuizForm)}
+                    className="toggle-btn"
+                  >
+                    {showQuizForm ? 'Hide Quiz Form' : 'Add Quiz'}
+                  </button>
+                </div>
+
+                {showQuizForm && (
+                  <div className="quiz-form">
+                    <div className="form-group">
+                      <label>Quiz Title</label>
+                      <input
+                        type="text"
+                        value={quizForm.title}
+                        onChange={(e) => setQuizForm({...quizForm, title: e.target.value})}
+                        placeholder="Lesson Quiz"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Passing Score (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={quizForm.passingScore}
+                        onChange={(e) => setQuizForm({...quizForm, passingScore: parseInt(e.target.value) || 70})}
+                      />
+                    </div>
+
+                    <div className="current-question">
+                      <h5>Add New Question</h5>
+                      <div className="form-group">
+                        <label>Question Type</label>
+                        <select
+                          value={currentQuestion.type}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, type: e.target.value})}
+                        >
+                          <option value="text">Text Question</option>
+                          <option value="image">Image Question</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Question Text</label>
+                        <input
+                          type="text"
+                          value={currentQuestion.question}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, question: e.target.value})}
+                          placeholder="Enter your question here"
+                        />
+                      </div>
+
+                      {currentQuestion.type === 'image' && (
+                        <div className="form-group">
+                          <label>Image URL</label>
+                          <input
+                            type="url"
+                            value={currentQuestion.imageUrl}
+                            onChange={(e) => setCurrentQuestion({...currentQuestion, imageUrl: e.target.value})}
+                            placeholder="https://example.com/image.jpg"
+                          />
+                        </div>
+                      )}
+
+                      <div className="options-section">
+                        <h6>Options</h6>
+                        {currentQuestion.options.map((option, index) => (
+                          <div key={index} className="option-item">
+                            <input
+                              type="radio"
+                              name="correctAnswer"
+                              checked={currentQuestion.correctAnswer === index}
+                              onChange={() => handleCorrectAnswerChange(index)}
+                            />
+                            <input
+                              type="text"
+                              value={option}
+                              onChange={(e) => handleOptionChange(index, e.target.value)}
+                              placeholder={`Option ${index + 1}`}
+                              className="option-input"
+                            />
+                            <span className="correct-label">
+                              {currentQuestion.correctAnswer === index ? 'Correct' : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <button 
+                        type="button" 
+                        onClick={handleAddQuestion}
+                        className="add-question-btn"
+                      >
+                        Add Question to Quiz
+                      </button>
+                    </div>
+
+                    {quizForm.questions.length > 0 && (
+                      <div className="existing-questions">
+                        <h5>Questions in Quiz ({quizForm.questions.length})</h5>
+                        {quizForm.questions.map((question, index) => (
+                          <div key={question.id} className="question-item">
+                            <div className="question-info">
+                              <strong>Q{index + 1}:</strong> {question.question}
+                              {question.type === 'image' && question.imageUrl && (
+                                <div className="question-image-preview">
+                                  <img src={question.imageUrl} alt="Question" style={{maxWidth: '100px'}} />
+                                </div>
+                              )}
+                              <div className="options-preview">
+                                Options: {question.options.join(', ')}
+                              </div>
+                              <div className="correct-answer">
+                                Correct: Option {question.correctAnswer + 1}
+                              </div>
+                            </div>
+                            <button 
+                              type="button"
+                              onClick={() => handleRemoveQuestion(question.id)}
+                              className="remove-btn"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button type="submit" className="submit-btn" disabled={isUploading}>
+                {isUploading ? `Uploading Video... ${uploadProgress}%` : 'Add Lesson'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* Manage Multimedia Tab */}
+        {activeTab === 'manage-multimedia' && (
+          <div className="manage-multimedia-tab">
+            <h3>
+              Manage Multimedia Content
+              {managingMultimedia && ` - ${managingMultimedia.lesson.title}`}
+            </h3>
+
+            {!managingMultimedia ? (
+              <div className="select-lesson-prompt">
+                <p>Select a lesson to manage its multimedia content:</p>
+                <div className="lessons-grid">
+                  {Object.entries(courses).map(([courseKey, course]) =>
+                    course.lessons?.map(lesson => (
+                      <div key={`${courseKey}-${lesson.id}`} className="lesson-select-card">
+                        <div className="lesson-info">
+                          <strong>{lesson.title}</strong>
+                          <span>Course: {course.title}</span>
+                          <span>Type: {lesson.isFree ? 'FREE' : `PAID - ${formatCurrency(lesson.price)}`}</span>
+                        </div>
+                        <div className="multimedia-stats">
+                          {lesson.multimedia && lesson.multimedia.length > 0 ? (
+                            <span className="has-media">📹 {lesson.multimedia.length} media files</span>
+                          ) : (
+                            <span className="no-media">No media</span>
+                          )}
+                        </div>
+                        <button 
+                          className="manage-media-btn"
+                          onClick={() => startManageMultimedia(courseKey, lesson)}
+                        >
+                          Manage Media
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="multimedia-management">
+                <div className="management-header">
+                  <button 
+                    className="back-to-lessons"
+                    onClick={() => setManagingMultimedia(null)}
+                  >
+                    ← Back to Lessons
+                  </button>
+                  <h4>Managing: {managingMultimedia.lesson.title}</h4>
+                </div>
+
+                <div className="add-multimedia-form">
+                  <h5>Add New Multimedia Content</h5>
+                  <form onSubmit={handleAddMultimedia} className="teacher-form compact">
+                    <div className="form-group">
+                      <label>Media Type</label>
+                      <select
+                        value={newMultimediaForm.type}
+                        onChange={(e) => setNewMultimediaForm({...newMultimediaForm, type: e.target.value})}
+                        required
+                      >
+                        <option value="video">Video</option>
+                        <option value="image">Image</option>
+                        <option value="audio">Audio</option>
+                        <option value="document">Document</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Media URL</label>
+                      <input
+                        type="url"
+                        value={newMultimediaForm.url}
+                        onChange={(e) => setNewMultimediaForm({...newMultimediaForm, url: e.target.value})}
+                        placeholder={
+                          newMultimediaForm.type === 'video' 
+                            ? 'https://www.youtube.com/watch?v=VIDEO_ID' 
+                            : 'https://example.com/image.jpg'
+                        }
+                        required
+                      />
+                      <small className="help-text">
+                        {newMultimediaForm.type === 'video' 
+                          ? 'For YouTube: Use regular YouTube links (watch or youtu.be). For uploaded videos, use the URL from the media.' 
+                          : 'Direct link to image, audio file, or document'}
+                      </small>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Title</label>
+                      <input
+                        type="text"
+                        value={newMultimediaForm.title}
+                        onChange={(e) => setNewMultimediaForm({...newMultimediaForm, title: e.target.value})}
+                        required
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Description</label>
+                      <textarea
+                        value={newMultimediaForm.description}
+                        onChange={(e) => setNewMultimediaForm({...newMultimediaForm, description: e.target.value})}
+                        rows="2"
+                      />
+                    </div>
+
+                    <button type="submit" className="submit-btn">Add Media</button>
+                  </form>
+                </div>
+
+                <div className="existing-multimedia">
+                  <h5>Existing Media Content</h5>
+                  {managingMultimedia.lesson.multimedia && managingMultimedia.lesson.multimedia.length > 0 ? (
+                    <div className="multimedia-list">
+                      {managingMultimedia.lesson.multimedia.map(media => (
+                        <div key={media.id} className="media-item">
+                          <div className="media-preview">
+                            {media.type === 'video' && <span className="media-icon">🎬</span>}
+                            {media.type === 'image' && <span className="media-icon">🖼️</span>}
+                            {media.type === 'audio' && <span className="media-icon">🎵</span>}
+                            {media.type === 'document' && <span className="media-icon">📄</span>}
+                            <div className="media-info">
+                              <strong>{media.title}</strong>
+                              <span>Type: {media.type}</span>
+                              {media.isUploaded && <span className="uploaded-badge">📤 Uploaded</span>}
+                              <span className="media-url">{media.url}</span>
+                            </div>
+                          </div>
+                          <button 
+                            className="delete-btn"
+                            onClick={() => handleDeleteMultimedia(media.id, media.title)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="no-media-message">No multimedia content added yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TeacherDashboard;
