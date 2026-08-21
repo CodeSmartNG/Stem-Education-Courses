@@ -3,15 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://martng.github.io",
+  "homepage": "https://codesmartng.github.io/Stem-Education-Courses/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint . --fix",
     "preview": "vite preview",
-    "predeploy": "npm run build",
     "deploy": "vite build && gh-pages -d dist"
   }
+
 },
   "dependencies": {
     "date-fns": "^4.4.0",
