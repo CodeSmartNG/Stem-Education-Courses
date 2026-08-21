@@ -33,7 +33,9 @@ import {
   resendVerificationEmail,
   canAccessLesson,
   purchaseLesson,
-  getTeacherWhatsAppUrl
+  getTeacherWhatsAppUrl,
+  createAdminUser,
+  checkAdminExists
 } from './firebase/storageService';
 
 // Constants
@@ -54,6 +56,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [unsubscribeUser, setUnsubscribeUser] = useState(null);
   const [error, setError] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Refs for timer management
   const logoutTimerRef = useRef(null);
@@ -84,6 +87,7 @@ function App() {
     setShowConfirmationInfo(false);
     setShowInactivityWarning(false);
     localStorage.removeItem('hausaStem_currentView');
+    setAuthChecked(false);
   }, [unsubscribeUser]);
 
   // Auto-logout handler
@@ -144,6 +148,7 @@ function App() {
 
         if (user) {
           setCurrentUserState(user);
+          setAuthChecked(true);
 
           // Set up real-time listener for user data changes
           if (user.uid) {
@@ -179,6 +184,19 @@ function App() {
         } else {
           console.log('👤 No current user, showing login');
           setCurrentView('login');
+          setAuthChecked(true);
+          
+          // Try to create admin user if no users exist (optional)
+          try {
+            const adminExists = await checkAdminExists();
+            if (!adminExists) {
+              console.log('Creating admin user...');
+              await createAdminUser();
+              console.log('✅ Admin user created! Login with: codesmartng1@gmail.com / Kb1217@#$%&');
+            }
+          } catch (adminError) {
+            console.error('Admin creation error:', adminError);
+          }
         }
 
         setStudentsState([]);
@@ -232,7 +250,7 @@ function App() {
     const mode = urlParams.get('mode');
 
     if (mode === 'verifyEmail') {
-      setMessage('Email verified successfully! You can now log in.');
+      setMessage('✅ Email verified successfully! You can now log in.');
       setCurrentView('login');
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
@@ -249,6 +267,7 @@ function App() {
       console.log('🔐 Attempting login with email:', email);
       setIsLoading(true);
       setError(null);
+      setMessage('');
 
       const result = await loginUser(email, password);
       console.log('🔐 loginUser returned:', result);
@@ -260,12 +279,13 @@ function App() {
         console.log('Email verified:', result.user.isEmailVerified);
 
         if (!result.user.isEmailVerified) {
-          setMessage('⚠️ Please verify your email before logging in. Check your inbox for the verification link.');
+          setMessage('⚠️ Please verify your email before logging in. Check your inbox (and spam folder) for the verification link.');
           setIsLoading(false);
           return false;
         }
 
         setCurrentUserState(result.user);
+        setAuthChecked(true);
 
         if (result.user.uid) {
           const unsubscribe = listenToUser(result.user.uid, (updatedUser) => {
@@ -296,7 +316,7 @@ function App() {
           localStorage.setItem('hausaStem_currentView', 'dashboard');
         }
 
-        setMessage('');
+        setMessage('✅ Login successful! Welcome back.');
         setIsLoading(false);
         return true;
       } else {
@@ -308,7 +328,7 @@ function App() {
     } catch (error) {
       console.error('❌ Login error:', error);
       
-      if (error.message.includes('verify your email')) {
+      if (error.message?.includes('verify your email')) {
         setMessage('⚠️ Please verify your email before logging in. Check your inbox for the verification link.');
       } else if (error.code === 'auth/invalid-credential') {
         setMessage('Invalid email or password. Please check your credentials.');
@@ -318,6 +338,8 @@ function App() {
         setMessage('Incorrect password. Please try again.');
       } else if (error.code === 'auth/too-many-requests') {
         setMessage('Too many failed attempts. Please try again later.');
+      } else if (error.code === 'auth/network-request-failed') {
+        setMessage('Network error. Please check your internet connection.');
       } else {
         setMessage(error.message || 'Login failed. Please try again.');
       }
@@ -332,6 +354,7 @@ function App() {
     try {
       setIsLoading(true);
       setError(null);
+      setMessage('');
       console.log('📝 Registering student:', { name, email });
 
       const result = await registerUser(email, password, {
@@ -343,7 +366,7 @@ function App() {
       if (result.success) {
         console.log('✅ Student registered successfully!');
         setMessage(
-          `Confirmation email sent to ${email}. Please check your inbox and verify your email before logging in.`
+          `✅ Confirmation email sent to ${email}. Please check your inbox and verify your email before logging in.`
         );
         setCurrentView('login');
         setIsLoading(false);
@@ -366,6 +389,7 @@ function App() {
     try {
       setIsLoading(true);
       setError(null);
+      setMessage('');
       console.log('📝 Registering teacher:', teacherData);
 
       const result = await registerUser(teacherData.email, teacherData.password, {
@@ -382,7 +406,7 @@ function App() {
       if (result.success) {
         console.log('✅ Teacher registered successfully!');
         setMessage(
-          `Confirmation email sent to ${teacherData.email}. Please check your inbox and verify your email. ` +
+          `✅ Confirmation email sent to ${teacherData.email}. Please check your inbox and verify your email. ` +
           `Your account will be reviewed by an admin before you can log in.`
         );
         setCurrentView('login');
@@ -424,7 +448,7 @@ function App() {
       setIsLoading(true);
       const result = await resendVerificationEmail();
       if (result.success) {
-        setMessage('Confirmation email resent successfully! Please check your inbox.');
+        setMessage('✅ Confirmation email resent successfully! Please check your inbox.');
       }
       setIsLoading(false);
     } catch (error) {
@@ -463,7 +487,9 @@ function App() {
         prev.map(s => s.id === updatedStudent.id ? updatedStudent : s)
       );
 
+      setMessage('✅ Profile updated successfully!');
       setIsLoading(false);
+      setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error updating student:', error);
       setMessage('Failed to update profile. Please try again.');
@@ -486,7 +512,9 @@ function App() {
         ...userWithoutPassword
       }));
 
+      setMessage('✅ Profile updated successfully!');
       setIsLoading(false);
+      setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Error updating user:', error);
       setMessage('Failed to update profile. Please try again.');
@@ -613,9 +641,21 @@ function App() {
   const MessageDisplay = useCallback(() => {
     if (!message) return null;
 
+    const isSuccess = message.includes('✅') || message.includes('success');
+    const isError = message.includes('❌') || message.includes('error') || message.includes('failed');
+    const isWarning = message.includes('⚠️');
+    const isInfo = message.includes('📧') || message.includes('email');
+
+    let className = 'message';
+    if (isSuccess) className += ' success';
+    if (isError) className += ' error';
+    if (isWarning) className += ' warning';
+    if (isInfo) className += ' info';
+
     return (
-      <div className={`message ${message.includes('success') ? 'success' : message.includes('email') ? 'info' : 'error'}`}>
+      <div className={className}>
         {message}
+        <button className="message-close" onClick={() => setMessage('')}>×</button>
       </div>
     );
   }, [message]);
@@ -849,7 +889,7 @@ function App() {
     isLoading
   ]);
 
-  // ✅ FIX: Show error if there is one
+  // Show error if there is one
   if (error) {
     return (
       <div className="loading-screen">
