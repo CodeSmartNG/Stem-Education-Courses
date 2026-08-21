@@ -69,6 +69,7 @@ export const listenToUser = (uid, callback) => {
   });
 };
 
+// ✅ KEPT: export const registerUser
 export const registerUser = async (email, password, userData) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -667,7 +668,6 @@ export const updateLesson = async (courseId, lessonId, updateData) => {
   }
 };
 
-// ✅ REMOVED 'export const' from here
 const deleteLesson = async (courseId, lessonId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
@@ -693,7 +693,6 @@ const deleteLesson = async (courseId, lessonId) => {
   }
 };
 
-// ✅ REMOVED 'export const' from here
 const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
@@ -729,7 +728,6 @@ const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
   }
 };
 
-// ✅ REMOVED 'export const' from here
 const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaId) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
@@ -1218,10 +1216,11 @@ const initializeStorage = async () => {
 };
 
 // ==================== SINGLE EXPORT LIST ====================
+// ✅ REMOVED duplicate exports - all functions are exported only once
 
 export {
   // Auth
-  registerUser,
+  // registerUser, ❌ REMOVED - exported inline above
   loginUser,
   logoutUser,
   getCurrentUser,
@@ -1253,54 +1252,4 @@ export {
   getTeacherCourses,
   updateCourse,
   deleteCourse,
-  publishCourse,
-  
-  // Lessons
-  getLessons,
-  addLessonToCourse,
-  
-  deleteLesson,
-  addMultimediaToLesson,
-  deleteMultimediaFromLesson,
-  
-  // Enrollment
-  enrollStudent,
-  unenrollStudent,
-  updateProgress,
-  
-  // Purchases
-  purchaseLesson,
-  canAccessLesson,
-  
-  // Wallet
-  getTeacherWallet,
-  addTeacherEarnings,
-  withdrawFromWallet,
-  getTeacherWallets,
-  saveTeacherWallets,
-  
-  // Payments
-  processLessonPayment,
-  getPaymentTransactions,
-  savePaymentTransactions,
-  
-  // Admin
-  getAllCoursesForAdmin,
-  getCourseDetailsForAdmin,
-  deleteCourseAsAdmin,
-  deleteLessonAsAdmin,
-  getCourseAnalyticsForAdmin,
-  getTeacherCoursesForAdmin,
-  getPlatformStats,
-  getUsers,
-  deleteUser,
-  updateUser,
-  
-  // Student
-  getStudentById,
-  updateStudent,
-  
-  // Other
-  getStudents,
-  initializeStorage
-};
+  publish
