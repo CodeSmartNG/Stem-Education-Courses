@@ -1258,7 +1258,7 @@ export {
   // Lessons
   getLessons,
   addLessonToCourse,
-  updateLesson,
+  
   deleteLesson,
   addMultimediaToLesson,
   deleteMultimediaFromLesson,
