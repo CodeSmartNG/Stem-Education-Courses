@@ -36,9 +36,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-    <!-- ✅ Added base tag for GitHub Pages -->
-    <base href="/" />
-
     <style>
       /* ========================================
          LOADING SCREEN STYLES
@@ -83,7 +80,6 @@
         z-index: 1;
       }
 
-      /* Logo / Icon */
       .loading-icon {
         font-size: 4.5rem;
         margin-bottom: 1rem;
@@ -96,7 +92,6 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
-      /* Loading Spinner */
       .loading-spinner {
         width: 60px;
         height: 60px;
@@ -108,7 +103,6 @@
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
       }
 
-      /* Loading Text */
       .loading-title {
         font-size: 2.2rem;
         font-weight: 700;
@@ -149,7 +143,6 @@
         animation-delay: 0.4s;
       }
 
-      /* Loading Progress Bar */
       .loading-progress {
         width: 250px;
         height: 4px;
@@ -180,7 +173,6 @@
         animation: shimmer 2s ease-in-out infinite;
       }
 
-      /* Loading Particles */
       .loading-particles {
         position: fixed;
         top: 0;
@@ -213,7 +205,6 @@
       .particle:nth-child(9) { top: 80%; left: 30%; animation-delay: 1.5s; width: 12px; height: 12px; }
       .particle:nth-child(10) { bottom: 60%; right: 20%; animation-delay: 3.5s; width: 8px; height: 8px; }
 
-      /* Version Badge */
       .loading-version {
         margin-top: 2rem;
         font-size: 0.7rem;
@@ -227,7 +218,6 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
-      /* Error Display (if React fails to load) */
       .error-display {
         display: none;
         flex-direction: column;
@@ -283,10 +273,6 @@
         transform: translateY(-2px);
       }
 
-      /* ========================================
-         ANIMATIONS
-         ======================================== */
-
       @keyframes spin {
         from { transform: rotate(0deg); }
         to { transform: rotate(360deg); }
@@ -326,97 +312,45 @@
         75% { transform: translate(20px, 10px) scale(1.1); }
       }
 
-      /* ========================================
-         RESPONSIVE DESIGN
-         ======================================== */
-
       @media (max-width: 768px) {
-        .loading-title {
-          font-size: 1.8rem;
-        }
-
-        .loading-icon {
-          font-size: 3.5rem;
-          padding: 15px;
-        }
-
-        .loading-spinner {
-          width: 50px;
-          height: 50px;
-        }
-
-        .loading-progress {
-          width: 200px;
-        }
+        .loading-title { font-size: 1.8rem; }
+        .loading-icon { font-size: 3.5rem; padding: 15px; }
+        .loading-spinner { width: 50px; height: 50px; }
+        .loading-progress { width: 200px; }
       }
 
       @media (max-width: 480px) {
-        .loading-title {
-          font-size: 1.5rem;
-        }
-
-        .loading-icon {
-          font-size: 2.8rem;
-          padding: 12px;
-        }
-
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-        }
-
-        .loading-subtitle {
-          font-size: 0.875rem;
-        }
-
-        .loading-progress {
-          width: 160px;
-        }
-
-        .loading-version {
-          font-size: 0.6rem;
-        }
-
-        .error-title {
-          font-size: 1.2rem;
-        }
+        .loading-title { font-size: 1.5rem; }
+        .loading-icon { font-size: 2.8rem; padding: 12px; }
+        .loading-spinner { width: 40px; height: 40px; }
+        .loading-subtitle { font-size: 0.875rem; }
+        .loading-progress { width: 160px; }
+        .loading-version { font-size: 0.6rem; }
+        .error-title { font-size: 1.2rem; }
       }
-
-      /* ========================================
-         DARK MODE SUPPORT
-         ======================================== */
 
       @media (prefers-color-scheme: dark) {
         body {
           background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%) !important;
         }
-
         .loading-spinner {
           border-color: rgba(255, 255, 255, 0.1);
           border-top-color: #818cf8;
         }
-
         .loading-progress {
           background: rgba(255, 255, 255, 0.1);
         }
-
         .loading-progress-bar {
           background: linear-gradient(90deg, #818cf8, #a78bfa, #c084fc);
         }
-
         .particle {
           background: rgba(129, 140, 248, 0.08);
         }
-
         .loading-icon {
           background: rgba(255, 255, 255, 0.05);
           border-color: rgba(255, 255, 255, 0.05);
         }
       }
-
-      /* ========================================
-         REDUCED MOTION
-         ======================================== */
 
       @media (prefers-reduced-motion: reduce) {
         .loading-spinner,
@@ -427,15 +361,12 @@
         .loading-progress-bar::after {
           animation: none !important;
         }
-
         .loading-container {
           animation: none !important;
         }
-
         .loading-progress-bar {
           width: 100% !important;
         }
-
         .loading-progress-bar::after {
           display: none !important;
         }
@@ -446,7 +377,6 @@
     <!-- Loading Screen -->
     <div id="root">
       <div class="loading-container">
-        <!-- Floating Particles -->
         <div class="loading-particles">
           <div class="particle"></div>
           <div class="particle"></div>
@@ -460,33 +390,21 @@
           <div class="particle"></div>
         </div>
 
-        <!-- Loading Icon -->
         <span class="loading-icon">📚</span>
-
-        <!-- Spinner -->
         <div class="loading-spinner"></div>
-
-        <!-- Title -->
         <h1 class="loading-title">CodeSmartNG Stem</h1>
         <p class="loading-subtitle">Loading your learning experience...</p>
-
-        <!-- Animated Dots -->
         <div class="loading-dots">
           <span>.</span>
           <span>.</span>
           <span>.</span>
         </div>
-
-        <!-- Progress Bar -->
         <div class="loading-progress">
           <div class="loading-progress-bar"></div>
         </div>
-
-        <!-- Version -->
         <p class="loading-version">v1.0.0 • STEM Education Platform</p>
       </div>
 
-      <!-- Error Display (hidden by default, shown if React fails to load) -->
       <div class="error-display" id="errorDisplay">
         <div class="error-icon">⚠️</div>
         <h2 class="error-title">Failed to Load</h2>
@@ -495,15 +413,13 @@
       </div>
     </div>
 
-    <!-- App Script - ✅ Using relative path for GitHub Pages -->
-    <script type="module" src="./src/main.jsx"></script>
+    <!-- ✅ Fix: Use absolute path for main.jsx -->
+    <script type="module" src="/src/main.jsx"></script>
 
     <!-- Fallback error handler -->
     <script>
-      // Check if the app loaded successfully
       window.addEventListener('load', function() {
         setTimeout(function() {
-          // If React hasn't rendered in 10 seconds, show error
           const root = document.getElementById('root');
           if (root && root.children.length === 1 && root.children[0].className === 'loading-container') {
             const errorDisplay = document.getElementById('errorDisplay');
@@ -518,12 +434,12 @@
         }, 10000);
       });
 
-      // Handle script loading errors
+      // ✅ Fix: Handle module script errors
       document.addEventListener('DOMContentLoaded', function() {
-        const scripts = document.querySelectorAll('script[type="module"]');
-        scripts.forEach(script => {
+        const script = document.querySelector('script[type="module"]');
+        if (script) {
           script.onerror = function() {
-            console.error('❌ Failed to load script:', script.src);
+            console.error('❌ Failed to load main.jsx');
             const errorDisplay = document.getElementById('errorDisplay');
             if (errorDisplay) {
               errorDisplay.classList.add('visible');
@@ -533,8 +449,13 @@
               }
             }
           };
-        });
+        }
       });
+
+      // ✅ Fix: Check if vite.svg is loading correctly
+      console.log('🔍 Checking asset paths...');
+      console.log('📍 Current URL:', window.location.href);
+      console.log('📍 Pathname:', window.location.pathname);
     </script>
   </body>
 </html>
