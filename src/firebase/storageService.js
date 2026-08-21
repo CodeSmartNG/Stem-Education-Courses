@@ -1,3 +1,4 @@
+
 // src/firebase/storageService.js
 import {
   auth,
@@ -1252,4 +1253,54 @@ export {
   getTeacherCourses,
   updateCourse,
   deleteCourse,
-  publish
+  publishCourse,
+  
+  // Lessons
+  getLessons,
+  addLessonToCourse,
+  updateLesson,
+  deleteLesson,
+  addMultimediaToLesson,
+  deleteMultimediaFromLesson,
+  
+  // Enrollment
+  enrollStudent,
+  unenrollStudent,
+  updateProgress,
+  
+  // Purchases
+  purchaseLesson,
+  canAccessLesson,
+  
+  // Wallet
+  getTeacherWallet,
+  addTeacherEarnings,
+  withdrawFromWallet,
+  getTeacherWallets,
+  saveTeacherWallets,
+  
+  // Payments
+  processLessonPayment,
+  getPaymentTransactions,
+  savePaymentTransactions,
+  
+  // Admin
+  getAllCoursesForAdmin,
+  getCourseDetailsForAdmin,
+  deleteCourseAsAdmin,
+  deleteLessonAsAdmin,
+  getCourseAnalyticsForAdmin,
+  getTeacherCoursesForAdmin,
+  getPlatformStats,
+  getUsers,
+  deleteUser,
+  updateUser,
+  
+  // Student
+  getStudentById,
+  updateStudent,
+  
+  // Other
+  getStudents,
+  initializeStorage
+};
