@@ -11,8 +11,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "vite build && gh-pages -d dist"
-  },
-  // ... rest of dependencies
+  }
 },
   "dependencies": {
     "date-fns": "^4.4.0",
