@@ -36,8 +36,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  
-   
+    <!-- ✅ Added base tag for GitHub Pages -->
+    <base href="/" />
 
     <style>
       /* ========================================
@@ -388,7 +388,7 @@
 
       @media (prefers-color-scheme: dark) {
         body {
-          background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+          background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%) !important;
         }
 
         .loading-spinner {
@@ -495,8 +495,8 @@
       </div>
     </div>
 
-    <!-- App Script -->
-    <script type="module" src="/src/main.jsx"></script>
+    <!-- App Script - ✅ Using relative path for GitHub Pages -->
+    <script type="module" src="./src/main.jsx"></script>
 
     <!-- Fallback error handler -->
     <script>
@@ -516,6 +516,24 @@
             }
           }
         }, 10000);
+      });
+
+      // Handle script loading errors
+      document.addEventListener('DOMContentLoaded', function() {
+        const scripts = document.querySelectorAll('script[type="module"]');
+        scripts.forEach(script => {
+          script.onerror = function() {
+            console.error('❌ Failed to load script:', script.src);
+            const errorDisplay = document.getElementById('errorDisplay');
+            if (errorDisplay) {
+              errorDisplay.classList.add('visible');
+              const loadingContainer = document.querySelector('.loading-container');
+              if (loadingContainer) {
+                loadingContainer.style.display = 'none';
+              }
+            }
+          };
+        });
       });
     </script>
   </body>
