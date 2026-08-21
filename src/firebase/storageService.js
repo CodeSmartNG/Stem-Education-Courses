@@ -1259,7 +1259,7 @@ export {
   getLessons,
   addLessonToCourse,
   updateLesson,
-  deleteLesson, // ✅ Only exported here
+  deleteLesson,
   addMultimediaToLesson,
   deleteMultimediaFromLesson,
   
