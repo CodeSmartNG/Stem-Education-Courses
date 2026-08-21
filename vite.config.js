@@ -2,18 +2,22 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './', // ✅ Important for GitHub Pages
+  base: './',
   server: {
     port: 3000,
-    open: true
+    open: true,
+    // ✅ Add CORS headers for manifest
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    }
   },
   build: {
     outDir: 'dist',
     sourcemap: true,
-    // ✅ Ensure assets are properly referenced
     assetsDir: 'assets',
     rollupOptions: {
       output: {
@@ -21,11 +25,7 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'firebase'],
           ui: ['framer-motion', 'react-hot-toast', 'react-hook-form'],
           charts: ['recharts']
-        },
-        // ✅ Ensure entry file is named correctly
-        entryFileNames: 'assets/[name].[hash].js',
-        chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+        }
       }
     }
   }
