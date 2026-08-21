@@ -16,24 +16,28 @@
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://yourdomain.com/" />
+    <meta property="og:url" content="https://martng.github.io/" />
     <meta property="og:title" content="CodeSmartNG Stem - Interactive STEM Education Platform" />
     <meta property="og:description" content="Learn programming, science, and technology with CodeSmartNG. Interactive STEM courses for students and teachers." />
-    <meta property="og:image" content="https://yourdomain.com/social-preview.png" />
+    <meta property="og:image" content="https://martng.github.io/social-preview.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:url" content="https://yourdomain.com/" />
+    <meta property="twitter:url" content="https://martng.github.io/" />
     <meta property="twitter:title" content="CodeSmartNG Stem - Interactive STEM Education Platform" />
     <meta property="twitter:description" content="Learn programming, science, and technology with CodeSmartNG. Interactive STEM courses for students and teachers." />
-    <meta property="twitter:image" content="https://yourdomain.com/social-preview.png" />
+    <meta property="twitter:image" content="https://martng.github.io/social-preview.png" />
 
     <!-- Theme Color -->
     <meta name="theme-color" content="#4f46e5" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- PWA Manifest (optional) -->
+    <link rel="manifest" href="/manifest.json" />
 
     <style>
       /* ========================================
@@ -55,6 +59,7 @@
         justify-content: center;
         margin: 0;
         padding: 20px;
+        overflow: hidden;
       }
 
       #root {
@@ -74,14 +79,21 @@
         text-align: center;
         color: white;
         animation: fadeIn 0.5s ease-out;
+        position: relative;
+        z-index: 1;
       }
 
       /* Logo / Icon */
       .loading-icon {
-        font-size: 4rem;
+        font-size: 4.5rem;
         margin-bottom: 1rem;
         animation: bounce 2s ease-in-out infinite;
         display: block;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 50%;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
       }
 
       /* Loading Spinner */
@@ -93,28 +105,35 @@
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-bottom: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
       }
 
       /* Loading Text */
       .loading-title {
-        font-size: 2rem;
+        font-size: 2.2rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
         letter-spacing: -0.5px;
+        background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
 
       .loading-subtitle {
         font-size: 1rem;
-        opacity: 0.8;
+        opacity: 0.9;
         margin-bottom: 0.5rem;
         font-weight: 300;
+        color: rgba(255, 255, 255, 0.8);
       }
 
       .loading-dots {
         display: inline-block;
-        font-size: 1.2rem;
+        font-size: 1.5rem;
         letter-spacing: 4px;
+        color: white;
       }
 
       .loading-dots span {
@@ -132,20 +151,33 @@
 
       /* Loading Progress Bar */
       .loading-progress {
-        width: 200px;
-        height: 3px;
+        width: 250px;
+        height: 4px;
         background: rgba(255, 255, 255, 0.2);
         border-radius: 2px;
-        margin-top: 1rem;
+        margin-top: 1.5rem;
         overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
       }
 
       .loading-progress-bar {
         height: 100%;
         width: 0%;
-        background: white;
+        background: linear-gradient(90deg, #818cf8, #c084fc, #f472b6);
         border-radius: 2px;
-        animation: progress 2s ease-in-out infinite;
+        animation: progress 2.5s ease-in-out infinite;
+        position: relative;
+      }
+
+      .loading-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+        animation: shimmer 2s ease-in-out infinite;
       }
 
       /* Loading Particles */
@@ -157,26 +189,99 @@
         bottom: 0;
         pointer-events: none;
         overflow: hidden;
-        z-index: -1;
+        z-index: 0;
       }
 
       .particle {
         position: absolute;
-        width: 6px;
-        height: 6px;
-        background: rgba(255, 255, 255, 0.15);
+        width: 8px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 50%;
         animation: float 8s ease-in-out infinite;
+        backdrop-filter: blur(2px);
       }
 
-      .particle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
-      .particle:nth-child(2) { top: 20%; right: 15%; animation-delay: 1s; }
-      .particle:nth-child(3) { bottom: 30%; left: 20%; animation-delay: 2s; }
-      .particle:nth-child(4) { bottom: 20%; right: 10%; animation-delay: 3s; }
-      .particle:nth-child(5) { top: 50%; left: 5%; animation-delay: 4s; }
-      .particle:nth-child(6) { top: 60%; right: 5%; animation-delay: 5s; }
-      .particle:nth-child(7) { bottom: 10%; left: 50%; animation-delay: 6s; }
-      .particle:nth-child(8) { top: 40%; left: 50%; animation-delay: 7s; }
+      .particle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; width: 12px; height: 12px; }
+      .particle:nth-child(2) { top: 20%; right: 15%; animation-delay: 1s; width: 8px; height: 8px; }
+      .particle:nth-child(3) { bottom: 30%; left: 20%; animation-delay: 2s; width: 10px; height: 10px; }
+      .particle:nth-child(4) { bottom: 20%; right: 10%; animation-delay: 3s; width: 6px; height: 6px; }
+      .particle:nth-child(5) { top: 50%; left: 5%; animation-delay: 4s; width: 14px; height: 14px; }
+      .particle:nth-child(6) { top: 60%; right: 5%; animation-delay: 5s; width: 8px; height: 8px; }
+      .particle:nth-child(7) { bottom: 10%; left: 50%; animation-delay: 6s; width: 10px; height: 10px; }
+      .particle:nth-child(8) { top: 40%; left: 50%; animation-delay: 7s; width: 6px; height: 6px; }
+      .particle:nth-child(9) { top: 80%; left: 30%; animation-delay: 1.5s; width: 12px; height: 12px; }
+      .particle:nth-child(10) { bottom: 60%; right: 20%; animation-delay: 3.5s; width: 8px; height: 8px; }
+
+      /* Version Badge */
+      .loading-version {
+        margin-top: 2rem;
+        font-size: 0.7rem;
+        opacity: 0.5;
+        color: white;
+        letter-spacing: 1px;
+        font-weight: 300;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 4px 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      /* Error Display (if React fails to load) */
+      .error-display {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: white;
+        padding: 40px;
+        max-width: 500px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 16px;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        animation: fadeIn 0.5s ease-out;
+      }
+
+      .error-display.visible {
+        display: flex;
+      }
+
+      .error-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+      }
+
+      .error-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .error-message {
+        font-size: 0.95rem;
+        opacity: 0.8;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+      }
+
+      .error-btn {
+        padding: 10px 30px;
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .error-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+      }
 
       /* ========================================
          ANIMATIONS
@@ -204,8 +309,14 @@
 
       @keyframes progress {
         0% { width: 0%; }
-        50% { width: 70%; }
+        30% { width: 40%; }
+        60% { width: 75%; }
         100% { width: 100%; }
+      }
+
+      @keyframes shimmer {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(100%); }
       }
 
       @keyframes float {
@@ -219,13 +330,34 @@
          RESPONSIVE DESIGN
          ======================================== */
 
-      @media (max-width: 640px) {
+      @media (max-width: 768px) {
+        .loading-title {
+          font-size: 1.8rem;
+        }
+
+        .loading-icon {
+          font-size: 3.5rem;
+          padding: 15px;
+        }
+
+        .loading-spinner {
+          width: 50px;
+          height: 50px;
+        }
+
+        .loading-progress {
+          width: 200px;
+        }
+      }
+
+      @media (max-width: 480px) {
         .loading-title {
           font-size: 1.5rem;
         }
 
         .loading-icon {
-          font-size: 3rem;
+          font-size: 2.8rem;
+          padding: 12px;
         }
 
         .loading-spinner {
@@ -233,36 +365,34 @@
           height: 40px;
         }
 
-        .loading-progress {
-          width: 150px;
-        }
-      }
-
-      @media (max-width: 400px) {
-        .loading-title {
-          font-size: 1.25rem;
-        }
-
-        .loading-icon {
-          font-size: 2.5rem;
-        }
-
         .loading-subtitle {
           font-size: 0.875rem;
+        }
+
+        .loading-progress {
+          width: 160px;
+        }
+
+        .loading-version {
+          font-size: 0.6rem;
+        }
+
+        .error-title {
+          font-size: 1.2rem;
         }
       }
 
       /* ========================================
-         DARK MODE SUPPORT (for loading screen)
+         DARK MODE SUPPORT
          ======================================== */
 
       @media (prefers-color-scheme: dark) {
         body {
-          background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+          background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
         }
 
         .loading-spinner {
-          border-color: rgba(255, 255, 255, 0.15);
+          border-color: rgba(255, 255, 255, 0.1);
           border-top-color: #818cf8;
         }
 
@@ -271,11 +401,16 @@
         }
 
         .loading-progress-bar {
-          background: #818cf8;
+          background: linear-gradient(90deg, #818cf8, #a78bfa, #c084fc);
         }
 
         .particle {
-          background: rgba(129, 140, 248, 0.1);
+          background: rgba(129, 140, 248, 0.08);
+        }
+
+        .loading-icon {
+          background: rgba(255, 255, 255, 0.05);
+          border-color: rgba(255, 255, 255, 0.05);
         }
       }
 
@@ -288,7 +423,8 @@
         .loading-icon,
         .loading-progress-bar,
         .loading-dots span,
-        .particle {
+        .particle,
+        .loading-progress-bar::after {
           animation: none !important;
         }
 
@@ -299,6 +435,10 @@
         .loading-progress-bar {
           width: 100% !important;
         }
+
+        .loading-progress-bar::after {
+          display: none !important;
+        }
       }
     </style>
   </head>
@@ -308,6 +448,8 @@
       <div class="loading-container">
         <!-- Floating Particles -->
         <div class="loading-particles">
+          <div class="particle"></div>
+          <div class="particle"></div>
           <div class="particle"></div>
           <div class="particle"></div>
           <div class="particle"></div>
@@ -341,13 +483,40 @@
         </div>
 
         <!-- Version -->
-        <p style="margin-top: 2rem; font-size: 0.7rem; opacity: 0.4; color: white;">
-          v1.0.0 • STEM Education Platform
-        </p>
+        <p class="loading-version">v1.0.0 • STEM Education Platform</p>
+      </div>
+
+      <!-- Error Display (hidden by default, shown if React fails to load) -->
+      <div class="error-display" id="errorDisplay">
+        <div class="error-icon">⚠️</div>
+        <h2 class="error-title">Failed to Load</h2>
+        <p class="error-message">We're having trouble loading the app. Please try refreshing the page.</p>
+        <button class="error-btn" onclick="window.location.reload()">🔄 Refresh Page</button>
       </div>
     </div>
 
     <!-- App Script -->
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Fallback error handler -->
+    <script>
+      // Check if the app loaded successfully
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          // If React hasn't rendered in 10 seconds, show error
+          const root = document.getElementById('root');
+          if (root && root.children.length === 1 && root.children[0].className === 'loading-container') {
+            const errorDisplay = document.getElementById('errorDisplay');
+            if (errorDisplay) {
+              errorDisplay.classList.add('visible');
+              const loadingContainer = document.querySelector('.loading-container');
+              if (loadingContainer) {
+                loadingContainer.style.display = 'none';
+              }
+            }
+          }
+        }, 10000);
+      });
+    </script>
   </body>
 </html>
