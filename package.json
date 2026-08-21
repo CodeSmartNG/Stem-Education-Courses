@@ -10,10 +10,9 @@
     "lint": "eslint . --fix",
     "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "vite build && gh-pages -d dist"
+    "deploy": "vite build && gh-pages -d dist --no-history"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
     "firebase": "^12.17.1",
     "framer-motion": "^13.1.0",
