@@ -4,10 +4,12 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/Stem-Education-Courses/', // ✅ Your repo name
+  // ✅ For Netlify, use '/' not the repo name
+  base: '/',
   server: {
     port: 3000,
-    open: true
+    open: true,
+    host: true // ✅ Important for Netlify/ Codespaces
   },
   build: {
     outDir: 'dist',
