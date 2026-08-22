@@ -1,4 +1,3 @@
-
 // src/firebase/storageService.js
 import {
   auth,
@@ -70,7 +69,6 @@ export const listenToUser = (uid, callback) => {
   });
 };
 
-// ✅ KEPT: export const registerUser
 export const registerUser = async (email, password, userData) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -634,7 +632,8 @@ export const addLessonToCourse = async (courseId, lessonData) => {
   }
 };
 
-export const updateLesson = async (courseId, lessonId, updateData) => {
+// ✅ REMOVED 'export const' from here - now just 'const'
+const updateLesson = async (courseId, lessonId, updateData) => {
   try {
     const courseRef = doc(db, 'courses', courseId);
     const courseDoc = await getDoc(courseRef);
@@ -1217,7 +1216,6 @@ const initializeStorage = async () => {
 };
 
 // ==================== SINGLE EXPORT LIST ====================
-// ✅ REMOVED duplicate exports - all functions are exported only once
 
 export {
   // Auth
@@ -1258,7 +1256,7 @@ export {
   // Lessons
   getLessons,
   addLessonToCourse,
-  updateLesson,
+  // updateLesson, ❌ REMOVED - exported inline above
   deleteLesson,
   addMultimediaToLesson,
   deleteMultimediaFromLesson,
