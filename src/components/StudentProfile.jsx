@@ -1,5 +1,11 @@
+// src/components/StudentProfile.jsx
 import React, { useState, useEffect } from 'react';
-import { getCurrentUser, updateUserProfile } from '../firebase/storageService';
+import { 
+  getCurrentUser, 
+  updateUserProfile,
+  uploadFile,
+  getFileUrl
+} from '../firebase/storageService';
 import './StudentProfile.css';
 
 const StudentProfile = ({ student, setStudent }) => {
@@ -42,7 +48,7 @@ const StudentProfile = ({ student, setStudent }) => {
         throw new Error('Please log in to update your profile');
       }
 
-      // Update profile data
+      // Prepare profile data
       const profileData = {
         displayName: formData.name,
         name: formData.name,
@@ -50,14 +56,21 @@ const StudentProfile = ({ student, setStudent }) => {
         bio: formData.bio,
         phone: formData.phone,
         location: formData.location,
-        interests: formData.interests,
-        updatedAt: new Date().toISOString()
+        interests: formData.interests
       };
 
-      // If there's a profile image, add it
-      if (imagePreview && imagePreview.startsWith('data:image')) {
-        profileData.photoURL = imagePreview;
-        profileData.profileImage = imagePreview;
+      // If there's a profile image, upload it
+      if (profileImage && profileImage.startsWith('data:image')) {
+        // Convert base64 to file
+        const response = await fetch(profileImage);
+        const blob = await response.blob();
+        const file = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
+        
+        // Upload to Firebase Storage
+        const filePath = `profiles/${currentUser.uid}/profile.jpg`;
+        const imageUrl = await uploadFile(file, filePath);
+        profileData.photoURL = imageUrl;
+        profileData.profileImage = imageUrl;
       }
 
       // Update in Firebase
@@ -73,15 +86,14 @@ const StudentProfile = ({ student, setStudent }) => {
         phone: formData.phone,
         location: formData.location,
         interests: formData.interests,
-        photoURL: imagePreview && imagePreview.startsWith('data:image') ? imagePreview : student.photoURL,
-        profileImage: imagePreview && imagePreview.startsWith('data:image') ? imagePreview : student.profileImage
+        photoURL: profileData.photoURL || student.photoURL,
+        profileImage: profileData.profileImage || student.profileImage
       };
 
       setStudent(updatedStudent);
       setMessage('✅ Profile updated successfully!');
       setIsEditing(false);
 
-      // Auto-hide message after 3 seconds
       setTimeout(() => setMessage(''), 3000);
 
     } catch (error) {
@@ -103,12 +115,10 @@ const StudentProfile = ({ student, setStudent }) => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         setError('Please select an image file');
         return;
       }
-      // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setError('Image must be less than 5MB');
         return;
@@ -132,7 +142,6 @@ const StudentProfile = ({ student, setStudent }) => {
     setIsEditing(false);
     setError('');
     setMessage('');
-    // Reset form data
     if (student) {
       setFormData({
         name: student.displayName || student.name || '',
@@ -147,7 +156,7 @@ const StudentProfile = ({ student, setStudent }) => {
     }
   };
 
-  // Add safety checks for student
+  // Safety check
   if (!student) {
     return (
       <div className="student-profile">
@@ -163,9 +172,8 @@ const StudentProfile = ({ student, setStudent }) => {
     : 0;
 
   const completedLessons = student.completedLessons?.length || 0;
-  const totalLessons = Object.values(progress).length * 3; // Assuming each course has 3 lessons
+  const totalLessons = Object.values(progress).length * 3;
 
-  // Get initials for avatar
   const getInitials = () => {
     const name = student.displayName || student.name || '';
     if (!name) return '?';
@@ -290,7 +298,6 @@ const StudentProfile = ({ student, setStudent }) => {
             ))}
           </div>
 
-          {/* Badges Section */}
           {student.badges && student.badges.length > 0 && (
             <div className="badges-section">
               <h3>🏅 Achievements</h3>
