@@ -1,67 +1,38 @@
- 
-// ==================== EXPORTS ====================
-
-export {
+// src/firebase/storageService.js
+import {
   auth,
   db,
   storage,
-  // Auth functions
-  getCurrentUser,
-  registerUserWithFirebase,
-  checkEmailVerification,
-  resendVerificationEmail,
-  loginWithFirebase,
-  logoutFromFirebase,
-  getCurrentFirebaseUser,
-  syncUserDataToLocal,
-  updateUserDataInFirestore,
-  updateUserProfile, // ✅ An ƙara shi
-  // Course functions
-  saveCourse,
-  getCourses,
-  getCourseByKey,
-  updateCourse,
-  deleteCourse,
-  // Lesson functions
-  saveLesson,
-  getLessons,
-  updateLesson,
-  deleteLesson,
-  // Purchase functions
-  purchaseLesson,
-  canAccessLesson,
-  hasStudentPurchasedLesson,
-  // Wallet functions
-  getTeacherWallet,
-  updateTeacherWallet,
-  addTeacherEarnings,
-  withdrawFromWallet,
-  getTeacherPaymentStats,
-  // Multimedia functions
-  addMultimediaToLesson,
-  deleteMultimediaFromLesson,
-  // Quiz functions
-  addQuizToLesson,
-  saveQuizResult,
-  // Certificate functions
-  generateCertificate,
-  verifyCertificate,
-  // Enrollment functions
-  enrollStudentInCourse,
-  updateCourseProgress,
-  // Payment functions
-  processLessonPayment,
-  // File functions
-  uploadFile,
-  uploadFileWithProgress,
-  getFileUrl,
-  deleteFile,
-  // Stats functions
-  getPlatformStats,
-  // Subscription functions
-  subscribeToUser,
-  subscribeToCourse
-};
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  arrayUnion,
+  arrayRemove,
+  increment,
+  serverTimestamp,
+  onSnapshot,
+  addDoc,
+  Timestamp,
+  writeBatch,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+  uploadBytesResumable,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  onAuthStateChanged
+} from './config';
 
 // ==================== AUTH FUNCTIONS ====================
 
@@ -211,25 +182,22 @@ export const updateUserDataInFirestore = async (uid, data) => {
   }
 };
 
-// ✅ USER PROFILE UPDATE
 export const updateUserProfile = async (uid, profileData) => {
   try {
     const userRef = doc(db, 'users', uid);
-    
-    // Prepare data for Firestore
+
     const firestoreData = {
       ...profileData,
       updatedAt: serverTimestamp()
     };
-    
-    // If displayName is provided, update it in Auth too
+
     if (profileData.displayName) {
       const user = auth.currentUser;
       if (user) {
         await updateProfile(user, { displayName: profileData.displayName });
       }
     }
-    
+
     await updateDoc(userRef, firestoreData);
     return true;
   } catch (error) {
@@ -823,6 +791,60 @@ export {
   auth,
   db,
   storage,
-  // Export the new function too
-  updateUserProfile
+  // Auth functions
+  getCurrentUser,
+  registerUserWithFirebase,
+  checkEmailVerification,
+  resendVerificationEmail,
+  loginWithFirebase,
+  logoutFromFirebase,
+  getCurrentFirebaseUser,
+  syncUserDataToLocal,
+  updateUserDataInFirestore,
+  updateUserProfile,
+  // Course functions
+  saveCourse,
+  getCourses,
+  getCourseByKey,
+  updateCourse,
+  deleteCourse,
+  // Lesson functions
+  saveLesson,
+  getLessons,
+  updateLesson,
+  deleteLesson,
+  // Purchase functions
+  purchaseLesson,
+  canAccessLesson,
+  hasStudentPurchasedLesson,
+  // Wallet functions
+  getTeacherWallet,
+  updateTeacherWallet,
+  addTeacherEarnings,
+  withdrawFromWallet,
+  getTeacherPaymentStats,
+  // Multimedia functions
+  addMultimediaToLesson,
+  deleteMultimediaFromLesson,
+  // Quiz functions
+  addQuizToLesson,
+  saveQuizResult,
+  // Certificate functions
+  generateCertificate,
+  verifyCertificate,
+  // Enrollment functions
+  enrollStudentInCourse,
+  updateCourseProgress,
+  // Payment functions
+  processLessonPayment,
+  // File functions
+  uploadFile,
+  uploadFileWithProgress,
+  getFileUrl,
+  deleteFile,
+  // Stats functions
+  getPlatformStats,
+  // Subscription functions
+  subscribeToUser,
+  subscribeToCourse
 };
