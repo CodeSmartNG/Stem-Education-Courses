@@ -1,38 +1,67 @@
-// src/firebase/storageService.js
-import {
+ 
+// ==================== EXPORTS ====================
+
+export {
   auth,
   db,
   storage,
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-  arrayUnion,
-  arrayRemove,
-  increment,
-  serverTimestamp,
-  onSnapshot,
-  addDoc,
-  Timestamp,
-  writeBatch,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-  uploadBytesResumable,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  updateProfile,
-  onAuthStateChanged
-} from './config';
+  // Auth functions
+  getCurrentUser,
+  registerUserWithFirebase,
+  checkEmailVerification,
+  resendVerificationEmail,
+  loginWithFirebase,
+  logoutFromFirebase,
+  getCurrentFirebaseUser,
+  syncUserDataToLocal,
+  updateUserDataInFirestore,
+  updateUserProfile, // ✅ An ƙara shi
+  // Course functions
+  saveCourse,
+  getCourses,
+  getCourseByKey,
+  updateCourse,
+  deleteCourse,
+  // Lesson functions
+  saveLesson,
+  getLessons,
+  updateLesson,
+  deleteLesson,
+  // Purchase functions
+  purchaseLesson,
+  canAccessLesson,
+  hasStudentPurchasedLesson,
+  // Wallet functions
+  getTeacherWallet,
+  updateTeacherWallet,
+  addTeacherEarnings,
+  withdrawFromWallet,
+  getTeacherPaymentStats,
+  // Multimedia functions
+  addMultimediaToLesson,
+  deleteMultimediaFromLesson,
+  // Quiz functions
+  addQuizToLesson,
+  saveQuizResult,
+  // Certificate functions
+  generateCertificate,
+  verifyCertificate,
+  // Enrollment functions
+  enrollStudentInCourse,
+  updateCourseProgress,
+  // Payment functions
+  processLessonPayment,
+  // File functions
+  uploadFile,
+  uploadFileWithProgress,
+  getFileUrl,
+  deleteFile,
+  // Stats functions
+  getPlatformStats,
+  // Subscription functions
+  subscribeToUser,
+  subscribeToCourse
+};
 
 // ==================== AUTH FUNCTIONS ====================
 
