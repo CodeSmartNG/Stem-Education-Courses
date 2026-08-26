@@ -797,7 +797,7 @@ export {
   getCurrentFirebaseUser,
   syncUserDataToLocal,
   updateUserDataInFirestore,
-  updateUserProfile,
+  //updateUserProfile,//deleted
   // Course functions
   saveCourse,
   getCourses,
