@@ -10,12 +10,13 @@ const StudentProfile = ({ student, setStudent }) => {
   const [error, setError] = useState('');
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Initialize formData when student changes
   useEffect(() => {
     if (student) {
       setFormData({
-        name: student.name || '',
+        name: student.displayName || student.name || '',
         email: student.email || '',
         level: student.level || 'Beginner',
         bio: student.bio || '',
@@ -23,8 +24,8 @@ const StudentProfile = ({ student, setStudent }) => {
         location: student.location || '',
         interests: student.interests || ''
       });
-      if (student.profileImage) {
-        setImagePreview(student.profileImage);
+      if (student.photoURL || student.profileImage) {
+        setImagePreview(student.photoURL || student.profileImage);
       }
     }
   }, [student]);
@@ -36,13 +37,14 @@ const StudentProfile = ({ student, setStudent }) => {
     setError('');
 
     try {
-      const currentUser = getCurrentUser();
+      const currentUser = await getCurrentUser();
       if (!currentUser) {
         throw new Error('Please log in to update your profile');
       }
 
-      // Update in Firebase
-      await updateUserProfile(currentUser.uid, {
+      // Update profile data
+      const profileData = {
+        displayName: formData.name,
         name: formData.name,
         level: formData.level,
         bio: formData.bio,
@@ -50,19 +52,32 @@ const StudentProfile = ({ student, setStudent }) => {
         location: formData.location,
         interests: formData.interests,
         updatedAt: new Date().toISOString()
-      });
+      };
+
+      // If there's a profile image, add it
+      if (imagePreview && imagePreview.startsWith('data:image')) {
+        profileData.photoURL = imagePreview;
+        profileData.profileImage = imagePreview;
+      }
+
+      // Update in Firebase
+      await updateUserProfile(currentUser.uid, profileData);
 
       // Update local state
-      setStudent({
+      const updatedStudent = {
         ...student,
+        displayName: formData.name,
         name: formData.name,
         level: formData.level,
         bio: formData.bio,
         phone: formData.phone,
         location: formData.location,
-        interests: formData.interests
-      });
+        interests: formData.interests,
+        photoURL: imagePreview && imagePreview.startsWith('data:image') ? imagePreview : student.photoURL,
+        profileImage: imagePreview && imagePreview.startsWith('data:image') ? imagePreview : student.profileImage
+      };
 
+      setStudent(updatedStudent);
       setMessage('✅ Profile updated successfully!');
       setIsEditing(false);
 
@@ -74,6 +89,7 @@ const StudentProfile = ({ student, setStudent }) => {
       setError(error.message || 'Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
+      setIsUploading(false);
     }
   };
 
@@ -98,9 +114,15 @@ const StudentProfile = ({ student, setStudent }) => {
         return;
       }
       setProfileImage(file);
+      setIsUploading(true);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result);
+        setIsUploading(false);
+      };
+      reader.onerror = () => {
+        setError('Failed to load image');
+        setIsUploading(false);
       };
       reader.readAsDataURL(file);
     }
@@ -113,7 +135,7 @@ const StudentProfile = ({ student, setStudent }) => {
     // Reset form data
     if (student) {
       setFormData({
-        name: student.name || '',
+        name: student.displayName || student.name || '',
         email: student.email || '',
         level: student.level || 'Beginner',
         bio: student.bio || '',
@@ -121,6 +143,7 @@ const StudentProfile = ({ student, setStudent }) => {
         location: student.location || '',
         interests: student.interests || ''
       });
+      setImagePreview(student.photoURL || student.profileImage || null);
     }
   };
 
@@ -144,8 +167,9 @@ const StudentProfile = ({ student, setStudent }) => {
 
   // Get initials for avatar
   const getInitials = () => {
-    if (!student.name) return '?';
-    return student.name
+    const name = student.displayName || student.name || '';
+    if (!name) return '?';
+    return name
       .split(' ')
       .map(word => word[0])
       .join('')
@@ -191,7 +215,7 @@ const StudentProfile = ({ student, setStudent }) => {
               )}
             </div>
             <div className="profile-name-section">
-              <h3>{student.name}</h3>
+              <h3>{student.displayName || student.name}</h3>
               <p className="profile-email">{student.email}</p>
               {student.bio && <p className="profile-bio">{student.bio}</p>}
             </div>
@@ -250,42 +274,20 @@ const StudentProfile = ({ student, setStudent }) => {
 
           <div className="progress-section">
             <h3>📈 Course Progress</h3>
-            <div className="progress-item">
-              <div className="progress-label">
-                <span>Web Development</span>
-                <span>{progress.webDevelopment || 0}%</span>
+            {Object.entries(progress).map(([courseKey, courseProgress]) => (
+              <div key={courseKey} className="progress-item">
+                <div className="progress-label">
+                  <span>{courseKey.charAt(0).toUpperCase() + courseKey.slice(1)}</span>
+                  <span>{courseProgress || 0}%</span>
+                </div>
+                <div className="progress-bar">
+                  <div 
+                    className="progress-fill" 
+                    style={{width: `${courseProgress || 0}%`}}
+                  ></div>
+                </div>
               </div>
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
-                  style={{width: `${progress.webDevelopment || 0}%`}}
-                ></div>
-              </div>
-            </div>
-            <div className="progress-item">
-              <div className="progress-label">
-                <span>Python</span>
-                <span>{progress.python || 0}%</span>
-              </div>
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
-                  style={{width: `${progress.python || 0}%`}}
-                ></div>
-              </div>
-            </div>
-            <div className="progress-item">
-              <div className="progress-label">
-                <span>Mathematics</span>
-                <span>{progress.mathematics || 0}%</span>
-              </div>
-              <div className="progress-bar">
-                <div 
-                  className="progress-fill" 
-                  style={{width: `${progress.mathematics || 0}%`}}
-                ></div>
-              </div>
-            </div>
+            ))}
           </div>
 
           {/* Badges Section */}
@@ -333,6 +335,33 @@ const StudentProfile = ({ student, setStudent }) => {
       ) : (
         // Edit Mode
         <form onSubmit={handleSubmit} className="profile-form">
+          {/* Profile Image Upload */}
+          <div className="form-group">
+            <label>Profile Image</label>
+            <div className="image-upload-container">
+              <div className="image-preview-wrapper">
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Profile preview" className="image-preview" />
+                ) : (
+                  <div className="image-placeholder">
+                    <span className="placeholder-icon">📷</span>
+                    <span>No image</span>
+                  </div>
+                )}
+                <label className="image-upload-label">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    disabled={loading || isUploading}
+                    className="image-input"
+                  />
+                  {isUploading ? 'Uploading...' : 'Change Photo'}
+                </label>
+              </div>
+            </div>
+          </div>
+
           <div className="form-group">
             <label htmlFor="name">Full Name</label>
             <input
@@ -356,7 +385,7 @@ const StudentProfile = ({ student, setStudent }) => {
               value={formData.email || ''}
               onChange={handleChange}
               required
-              disabled={true} // Email cannot be changed in demo
+              disabled={true}
               placeholder="Enter your email"
             />
             <small className="help-text">Email cannot be changed</small>
@@ -435,7 +464,7 @@ const StudentProfile = ({ student, setStudent }) => {
             <button 
               type="submit" 
               className="save-btn"
-              disabled={loading}
+              disabled={loading || isUploading}
             >
               {loading ? (
                 <>
