@@ -34,251 +34,188 @@ import {
 
 export const getCurrentUser = () => {
   return new Promise((resolve, reject) => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      unsubscribe();
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            resolve({
-              uid: user.uid,
-              email: user.email,
-              ...userDoc.data(),
-              isEmailVerified: user.emailVerified
-            });
-          } else {
-            resolve(null);
-          }
-        } catch (error) {
-          reject(error);
+    try {
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        unsubscribe();
+        if (user) {
+          resolve({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            emailVerified: user.emailVerified
+          });
+        } else {
+          resolve(null);
         }
-      } else {
-        resolve(null);
-      }
-    });
-  });
-};
-
-export const listenToUser = (uid, callback) => {
-  return onSnapshot(doc(db, 'users', uid), (docSnapshot) => {
-    if (docSnapshot.exists()) {
-      callback({ uid: docSnapshot.id, ...docSnapshot.data() });
-    } else {
-      callback(null);
+      });
+    } catch (error) {
+      reject(error);
     }
   });
 };
 
-export const registerUser = async (email, password, userData) => {
+export const registerUserWithFirebase = async (email, password, userData) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    await updateProfile(user, {
-      displayName: userData.name
+    await sendEmailVerification(user);
+    
+    if (userData.displayName) {
+      await updateProfile(user, { displayName: userData.displayName });
+    }
+
+    await setDoc(doc(db, 'users', user.uid), {
+      uid: user.uid,
+      email: email,
+      displayName: userData.displayName || '',
+      role: userData.role || 'student',
+      createdAt: serverTimestamp(),
+      isEmailVerified: false,
+      ...userData
     });
 
-    await sendEmailVerification(user);
-
-    const userDoc = {
+    return {
       uid: user.uid,
-      name: userData.name,
       email: user.email,
-      role: userData.role || 'student',
-      level: userData.level || 'Beginner',
-      isEmailVerified: false,
-      isApproved: userData.role === 'admin',
-      joinedDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      progress: {},
-      completedLessons: [],
-      points: 0,
-      badges: [],
-      enrolledCourses: [],
-      purchasedLessons: [],
-      paymentHistory: [],
-      specialization: userData.specialization || '',
-      bio: userData.bio || '',
-      courses: [],
-      earnings: 0,
-      whatsappNumber: userData.whatsappNumber || '',
-      profileImage: userData.profileImage || '',
-      isAdmin: userData.role === 'admin'
+      displayName: user.displayName,
+      isEmailVerified: false
     };
-
-    await setDoc(doc(db, 'users', user.uid), userDoc);
-
-    return { success: true, user: userDoc, uid: user.uid };
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Firebase registration error:', error);
     throw error;
   }
 };
 
-export const loginUser = async (email, password) => {
+export const checkEmailVerification = async (user) => {
+  try {
+    await user.reload();
+    return user.emailVerified;
+  } catch (error) {
+    console.error('Error checking email verification:', error);
+    return false;
+  }
+};
+
+export const resendVerificationEmail = async (user) => {
+  try {
+    await sendEmailVerification(user);
+    return true;
+  } catch (error) {
+    console.error('Error resending verification email:', error);
+    throw error;
+  }
+};
+
+export const loginWithFirebase = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
     if (!user.emailVerified) {
-      throw new Error('Please verify your email before logging in. Check your inbox for the verification link.');
+      throw new Error('Please verify your email before logging in.');
     }
 
     const userDoc = await getDoc(doc(db, 'users', user.uid));
-
-    if (!userDoc.exists()) {
-      throw new Error('User data not found');
-    }
-
-    const userData = userDoc.data();
-    if (userData.role === 'teacher' && !userData.isApproved) {
-      throw new Error('Your teacher account is pending admin approval. Please wait for approval before logging in.');
-    }
+    const userData = userDoc.exists() ? userDoc.data() : {};
 
     return {
-      success: true,
-      user: {
-        uid: user.uid,
-        email: user.email,
-        ...userData,
-        isEmailVerified: user.emailVerified
-      }
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      isEmailVerified: user.emailVerified,
+      ...userData
     };
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Firebase login error:', error);
     throw error;
   }
 };
 
-export const logoutUser = async () => {
+export const logoutFromFirebase = async () => {
   try {
     await signOut(auth);
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Logout error:', error);
+    console.error('Firebase logout error:', error);
     throw error;
   }
 };
 
-export const updateUserProfile = async (uid, updateData) => {
+export const getCurrentFirebaseUser = () => {
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+};
+
+export const syncUserDataToLocal = async (uid) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if (userDoc.exists()) {
+      return userDoc.data();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error syncing user data:', error);
+    return null;
+  }
+};
+
+export const updateUserDataInFirestore = async (uid, data) => {
   try {
     await updateDoc(doc(db, 'users', uid), {
-      ...updateData,
+      ...data,
       updatedAt: serverTimestamp()
     });
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Update profile error:', error);
+    console.error('Error updating user data in Firestore:', error);
     throw error;
   }
 };
 
-export const resetPassword = async (email) => {
+// ==================== COURSE MANAGEMENT ====================
+
+export const saveCourse = async (courseData) => {
   try {
-    await sendPasswordResetEmail(auth, email);
-    return { success: true };
-  } catch (error) {
-    console.error('Password reset error:', error);
-    throw error;
-  }
-};
-
-export const resendVerificationEmail = async () => {
-  try {
-    const user = auth.currentUser;
-    if (user) {
-      await sendEmailVerification(user);
-      return { success: true };
-    }
-    throw new Error('No user logged in');
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    throw error;
-  }
-};
-
-// ==================== ADMIN MANAGEMENT ====================
-
-const createAdminUser = async () => {
-  try {
-    const adminEmail = 'codesmartng1@gmail.com';
-    const adminPassword = 'Kb1217@#$%&';
-    const adminData = {
-      name: 'Kabir Alkasim',
-      role: 'admin',
-      isAdmin: true,
-      isApproved: true
-    };
-
-    try {
-      const result = await loginUser(adminEmail, adminPassword);
-      if (result.success) {
-        console.log('✅ Admin user already exists');
-        return { success: true, message: 'Admin already exists', user: result.user };
-      }
-    } catch (error) {
-      console.log('Admin not found, creating...');
-    }
-
-    const userCredential = await createUserWithEmailAndPassword(auth, adminEmail, adminPassword);
-    const user = userCredential.user;
-
-    await updateProfile(user, {
-      displayName: adminData.name
+    const docRef = doc(collection(db, 'courses'));
+    await setDoc(docRef, {
+      ...courseData,
+      id: docRef.id,
+      createdAt: serverTimestamp()
     });
-
-    const userDoc = {
-      uid: user.uid,
-      name: adminData.name,
-      email: adminEmail,
-      role: 'admin',
-      isAdmin: true,
-      isApproved: true,
-      isEmailVerified: true,
-      joinedDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    await setDoc(doc(db, 'users', user.uid), userDoc);
-
-    console.log('✅ Admin user created successfully!');
-    console.log('📧 Email:', adminEmail);
-    console.log('🔑 Password:', adminPassword);
-    
-    return { success: true, user: userDoc };
+    return docRef.id;
   } catch (error) {
-    console.error('Error creating admin user:', error);
-    if (error.code === 'auth/email-already-in-use') {
-      return { success: false, message: 'Admin user already exists' };
-    }
+    console.error('Error saving course:', error);
     throw error;
   }
 };
 
-const checkAdminExists = async () => {
+export const getCourses = async (teacherId = null) => {
   try {
-    const adminEmail = 'codesmartng1@gmail.com';
-    const usersSnapshot = await getDocs(collection(db, 'users'));
-    let adminExists = false;
-    usersSnapshot.forEach(doc => {
-      const data = doc.data();
-      if (data.email === adminEmail && data.role === 'admin') {
-        adminExists = true;
-      }
+    let q = collection(db, 'courses');
+    if (teacherId) {
+      q = query(q, where('teacherId', '==', teacherId));
+    }
+    const querySnapshot = await getDocs(q);
+    const courses = [];
+    querySnapshot.forEach(doc => {
+      courses.push({ id: doc.id, ...doc.data() });
     });
-    return adminExists;
+    return courses;
   } catch (error) {
-    console.error('Error checking admin:', error);
-    return false;
+    console.error('Error getting courses:', error);
+    throw error;
   }
 };
 
-const getAdminUser = async () => {
+export const getCourseByKey = async (courseKey) => {
   try {
-    const adminEmail = 'codesmartng1@gmail.com';
-    const q = query(collection(db, 'users'), where('email', '==', adminEmail), where('role', '==', 'admin'));
+    const q = query(collection(db, 'courses'), where('key', '==', courseKey));
     const querySnapshot = await getDocs(q);
     if (!querySnapshot.empty) {
       const doc = querySnapshot.docs[0];
@@ -286,269 +223,20 @@ const getAdminUser = async () => {
     }
     return null;
   } catch (error) {
-    console.error('Error getting admin:', error);
-    return null;
-  }
-};
-
-// ==================== TEACHER MANAGEMENT ====================
-
-const createTeacherUser = async (teacherData) => {
-  try {
-    const { email, password, name, specialization, bio, whatsappNumber } = teacherData;
-
-    try {
-      const result = await loginUser(email, password);
-      if (result.success) {
-        console.log('✅ Teacher user already exists');
-        return { success: true, message: 'Teacher already exists', user: result.user };
-      }
-    } catch (error) {
-      console.log('Teacher not found, creating...');
-    }
-
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
-
-    await updateProfile(user, {
-      displayName: name
-    });
-
-    await sendEmailVerification(user);
-
-    const userDoc = {
-      uid: user.uid,
-      name: name,
-      email: email,
-      role: 'teacher',
-      isAdmin: false,
-      isApproved: false,
-      isEmailVerified: false,
-      specialization: specialization || 'General',
-      bio: bio || '',
-      whatsappNumber: whatsappNumber || '',
-      profileImage: '',
-      courses: [],
-      earnings: 0,
-      joinedDate: serverTimestamp(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    await setDoc(doc(db, 'users', user.uid), userDoc);
-
-    const walletData = {
-      teacherId: user.uid,
-      balance: 0,
-      totalEarnings: 0,
-      pendingWithdrawals: 0,
-      transactions: [],
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    await setDoc(doc(db, 'wallets', user.uid), walletData);
-
-    console.log('✅ Teacher user created successfully!');
-    console.log('📧 Email:', email);
-    console.log('🔑 Password:', password);
-    console.log('⚠️ Account needs admin approval before login');
-
-    return { success: true, user: userDoc, uid: user.uid };
-  } catch (error) {
-    console.error('Error creating teacher user:', error);
-    if (error.code === 'auth/email-already-in-use') {
-      return { success: false, message: 'Teacher user already exists' };
-    }
+    console.error('Error getting course by key:', error);
     throw error;
   }
 };
 
-export const getTeacherWhatsAppUrl = async (teacherId) => {
-  try {
-    if (!teacherId) {
-      return null;
-    }
-
-    const teacherDoc = await getDoc(doc(db, 'users', teacherId));
-
-    if (!teacherDoc.exists()) {
-      return null;
-    }
-
-    const teacherData = teacherDoc.data();
-
-    if (!teacherData.whatsappNumber) {
-      return null;
-    }
-
-    const whatsappNumber = teacherData.whatsappNumber.replace(/\D/g, '');
-    const message = `Hello ${teacherData.name || 'Teacher'}! I found you on the STEM Learning Platform and would like to learn more about your courses.`;
-
-    return `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
-  } catch (error) {
-    console.error('Error getting teacher WhatsApp URL:', error);
-    return null;
-  }
-};
-
-export const updateTeacherProfileWithWhatsApp = async (teacherId, profileData) => {
-  try {
-    if (!teacherId) {
-      throw new Error('Teacher ID is required');
-    }
-
-    const userRef = doc(db, 'users', teacherId);
-    const userDoc = await getDoc(userRef);
-
-    if (!userDoc.exists()) {
-      throw new Error('Teacher not found');
-    }
-
-    await updateDoc(userRef, {
-      ...profileData,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Error updating teacher profile:', error);
-    throw error;
-  }
-};
-
-export const approveTeacher = async (teacherId) => {
-  try {
-    await updateDoc(doc(db, 'users', teacherId), {
-      isApproved: true,
-      approvedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Approve teacher error:', error);
-    throw error;
-  }
-};
-
-export const rejectTeacher = async (teacherId) => {
-  try {
-    await updateDoc(doc(db, 'users', teacherId), {
-      isApproved: false,
-      rejectedAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Reject teacher error:', error);
-    throw error;
-  }
-};
-
-export const getTeachers = async () => {
-  try {
-    const q = query(collection(db, 'users'), where('role', '==', 'teacher'));
-    const teachersSnapshot = await getDocs(q);
-    const teachers = [];
-    teachersSnapshot.forEach(doc => {
-      teachers.push({ id: doc.id, ...doc.data() });
-    });
-    return teachers;
-  } catch (error) {
-    console.error('Get teachers error:', error);
-    throw error;
-  }
-};
-
-export const getPendingTeachers = async () => {
-  try {
-    const q = query(collection(db, 'users'), where('role', '==', 'teacher'), where('isApproved', '==', false));
-    const teachersSnapshot = await getDocs(q);
-    const teachers = [];
-    teachersSnapshot.forEach(doc => {
-      teachers.push({ id: doc.id, ...doc.data() });
-    });
-    return teachers;
-  } catch (error) {
-    console.error('Get pending teachers error:', error);
-    throw error;
-  }
-};
-
-export const getApprovedTeachers = async () => {
-  try {
-    const q = query(collection(db, 'users'), where('role', '==', 'teacher'), where('isApproved', '==', true));
-    const teachersSnapshot = await getDocs(q);
-    const teachers = [];
-    teachersSnapshot.forEach(doc => {
-      teachers.push({ id: doc.id, ...doc.data() });
-    });
-    return teachers;
-  } catch (error) {
-    console.error('Get approved teachers error:', error);
-    throw error;
-  }
-};
-
-// ==================== COURSE MANAGEMENT ====================
-
-const getCourses = async () => {
-  try {
-    const coursesSnapshot = await getDocs(collection(db, 'courses'));
-    const courses = [];
-    coursesSnapshot.forEach(doc => {
-      courses.push({ id: doc.id, ...doc.data() });
-    });
-    return courses;
-  } catch (error) {
-    console.error('Get courses error:', error);
-    return [];
-  }
-};
-
-export const getTeacherCourses = async (teacherId) => {
-  try {
-    const q = query(collection(db, 'courses'), where('teacherId', '==', teacherId));
-    const coursesSnapshot = await getDocs(q);
-    const courses = [];
-    coursesSnapshot.forEach(doc => {
-      courses.push({ id: doc.id, ...doc.data() });
-    });
-    return courses;
-  } catch (error) {
-    console.error('Get teacher courses error:', error);
-    throw error;
-  }
-};
-
-export const addCourse = async (courseData, teacherId) => {
-  try {
-    const courseRef = doc(collection(db, 'courses'));
-    const course = {
-      ...courseData,
-      id: courseRef.id,
-      teacherId: teacherId,
-      lessons: [],
-      isPublished: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    await setDoc(courseRef, course);
-    return { success: true, courseId: courseRef.id };
-  } catch (error) {
-    console.error('Add course error:', error);
-    throw error;
-  }
-};
-
-export const updateCourse = async (courseId, updateData) => {
+export const updateCourse = async (courseId, courseData) => {
   try {
     await updateDoc(doc(db, 'courses', courseId), {
-      ...updateData,
+      ...courseData,
       updatedAt: serverTimestamp()
     });
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Update course error:', error);
+    console.error('Error updating course:', error);
     throw error;
   }
 };
@@ -556,522 +244,537 @@ export const updateCourse = async (courseId, updateData) => {
 export const deleteCourse = async (courseId) => {
   try {
     await deleteDoc(doc(db, 'courses', courseId));
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Delete course error:', error);
-    throw error;
-  }
-};
-
-const getCourseById = async (courseId) => {
-  try {
-    const courseDoc = await getDoc(doc(db, 'courses', courseId));
-    if (courseDoc.exists()) {
-      return { id: courseDoc.id, ...courseDoc.data() };
-    }
-    return null;
-  } catch (error) {
-    console.error('Get course error:', error);
-    throw error;
-  }
-};
-
-const publishCourse = async (courseId, isPublished) => {
-  try {
-    await updateDoc(doc(db, 'courses', courseId), {
-      isPublished: isPublished,
-      publishedAt: isPublished ? serverTimestamp() : null,
-      updatedAt: serverTimestamp()
-    });
-    return { success: true };
-  } catch (error) {
-    console.error('Publish course error:', error);
+    console.error('Error deleting course:', error);
     throw error;
   }
 };
 
 // ==================== LESSON MANAGEMENT ====================
 
-const getLessons = async (courseId) => {
+export const saveLesson = async (courseId, lessonData) => {
   try {
-    const course = await getCourseById(courseId);
-    return course?.lessons || [];
-  } catch (error) {
-    console.error('Get lessons error:', error);
-    return [];
-  }
-};
-
-export const addLessonToCourse = async (courseId, lessonData) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const newLesson = {
-      id: lessons.length + 1,
+    const docRef = doc(collection(db, 'lessons'));
+    await setDoc(docRef, {
       ...lessonData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
+      id: docRef.id,
+      courseId: courseId,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error('Error saving lesson:', error);
+    throw error;
+  }
+};
 
-    await updateDoc(courseRef, {
-      lessons: [...lessons, newLesson],
+export const getLessons = async (courseId) => {
+  try {
+    const q = query(collection(db, 'lessons'), where('courseId', '==', courseId));
+    const querySnapshot = await getDocs(q);
+    const lessons = [];
+    querySnapshot.forEach(doc => {
+      lessons.push({ id: doc.id, ...doc.data() });
+    });
+    return lessons;
+  } catch (error) {
+    console.error('Error getting lessons:', error);
+    throw error;
+  }
+};
+
+export const updateLesson = async (lessonId, lessonData) => {
+  try {
+    await updateDoc(doc(db, 'lessons', lessonId), {
+      ...lessonData,
       updatedAt: serverTimestamp()
     });
-
-    return { success: true, lesson: newLesson };
+    return true;
   } catch (error) {
-    console.error('Add lesson error:', error);
+    console.error('Error updating lesson:', error);
     throw error;
   }
 };
 
-// ✅ REMOVED 'export const' from here - now just 'const'
-const updateLesson = async (courseId, lessonId, updateData) => {
+export const deleteLesson = async (lessonId) => {
   try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const lessonIndex = lessons.findIndex(l => l.id === lessonId);
-
-    if (lessonIndex === -1) {
-      throw new Error('Lesson not found');
-    }
-
-    lessons[lessonIndex] = {
-      ...lessons[lessonIndex],
-      ...updateData,
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(courseRef, {
-      lessons: lessons,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true };
+    await deleteDoc(doc(db, 'lessons', lessonId));
+    return true;
   } catch (error) {
-    console.error('Update lesson error:', error);
+    console.error('Error deleting lesson:', error);
     throw error;
   }
 };
 
-const deleteLesson = async (courseId, lessonId) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
+// ==================== LESSON PURCHASE & ACCESS ====================
 
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const updatedLessons = lessons.filter(l => l.id !== lessonId);
-
-    await updateDoc(courseRef, {
-      lessons: updatedLessons,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Delete lesson error:', error);
-    throw error;
-  }
-};
-
-const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-    
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lesson = course.lessons.find(l => l.id === lessonId);
-    if (!lesson) {
-      throw new Error('Lesson not found');
-    }
-
-    if (!lesson.multimedia) {
-      lesson.multimedia = [];
-    }
-
-    const newMultimediaItem = {
-      id: lesson.multimedia.length > 0 ? Math.max(...lesson.multimedia.map(m => m.id)) + 1 : 1,
-      ...multimediaItem
-    };
-
-    lesson.multimedia.push(newMultimediaItem);
-    course.updatedAt = serverTimestamp();
-
-    await updateDoc(courseRef, course);
-    return { success: true, multimedia: newMultimediaItem };
-  } catch (error) {
-    console.error('Add multimedia error:', error);
-    throw error;
-  }
-};
-
-const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaId) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-    
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lesson = course.lessons.find(l => l.id === lessonId);
-    if (!lesson || !lesson.multimedia) {
-      throw new Error('Lesson or multimedia not found');
-    }
-
-    lesson.multimedia = lesson.multimedia.filter(item => item.id !== multimediaId);
-    course.updatedAt = serverTimestamp();
-
-    await updateDoc(courseRef, course);
-    return { success: true };
-  } catch (error) {
-    console.error('Delete multimedia error:', error);
-    throw error;
-  }
-};
-
-// ==================== ENROLLMENT ====================
-
-const enrollStudent = async (studentId, courseId) => {
+export const purchaseLesson = async (studentId, courseId, lessonId, paymentData = null) => {
   try {
     const userRef = doc(db, 'users', studentId);
     await updateDoc(userRef, {
-      enrolledCourses: arrayUnion(courseId),
-      updatedAt: serverTimestamp()
+      purchasedLessons: arrayUnion({ courseId, lessonId, purchasedAt: serverTimestamp(), ...paymentData })
     });
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Enroll student error:', error);
+    console.error('Error purchasing lesson:', error);
     throw error;
   }
 };
 
-const unenrollStudent = async (studentId, courseId) => {
+export const canAccessLesson = async (studentId, courseId, lessonId) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', studentId));
+    if (!userDoc.exists()) return false;
+    const userData = userDoc.data();
+    
+    // Check if lesson is in purchasedLessons
+    if (userData.purchasedLessons) {
+      return userData.purchasedLessons.some(p => p.lessonId === lessonId && p.courseId === courseId);
+    }
+    return false;
+  } catch (error) {
+    console.error('Error checking lesson access:', error);
+    return false;
+  }
+};
+
+export const hasStudentPurchasedLesson = async (studentId, courseId, lessonId) => {
+  return canAccessLesson(studentId, courseId, lessonId);
+};
+
+// ==================== TEACHER WALLET ====================
+
+export const getTeacherWallet = async (teacherId) => {
+  try {
+    const walletDoc = await getDoc(doc(db, 'wallets', teacherId));
+    if (walletDoc.exists()) {
+      return walletDoc.data();
+    }
+    return {
+      teacherId: teacherId,
+      balance: 0,
+      totalEarnings: 0,
+      pendingWithdrawals: 0,
+      transactions: [],
+      createdAt: serverTimestamp()
+    };
+  } catch (error) {
+    console.error('Error getting teacher wallet:', error);
+    throw error;
+  }
+};
+
+export const updateTeacherWallet = async (teacherId, walletData) => {
+  try {
+    await setDoc(doc(db, 'wallets', teacherId), {
+      ...walletData,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return true;
+  } catch (error) {
+    console.error('Error updating teacher wallet:', error);
+    throw error;
+  }
+};
+
+export const addTeacherEarnings = async (teacherId, amount, description, lessonDetails = {}) => {
+  try {
+    const wallet = await getTeacherWallet(teacherId);
+    const transaction = {
+      id: `txn_${Date.now()}`,
+      type: 'credit',
+      amount: amount,
+      description: description,
+      lessonDetails: lessonDetails,
+      date: new Date().toISOString(),
+      status: 'completed'
+    };
+
+    const updatedWallet = {
+      ...wallet,
+      balance: (wallet.balance || 0) + amount,
+      totalEarnings: (wallet.totalEarnings || 0) + amount,
+      transactions: [transaction, ...(wallet.transactions || [])]
+    };
+
+    await updateTeacherWallet(teacherId, updatedWallet);
+    return updatedWallet;
+  } catch (error) {
+    console.error('Error adding teacher earnings:', error);
+    throw error;
+  }
+};
+
+export const withdrawFromWallet = async (teacherId, amount, bankDetails) => {
+  try {
+    const wallet = await getTeacherWallet(teacherId);
+
+    if (wallet.balance < amount) {
+      throw new Error('Insufficient balance for withdrawal');
+    }
+
+    if (amount < 100) {
+      throw new Error('Minimum withdrawal amount is ₦100');
+    }
+
+    const transaction = {
+      id: `withdraw_${Date.now()}`,
+      type: 'debit',
+      amount: amount,
+      description: `Withdrawal to ${bankDetails.bankName}`,
+      bankDetails: bankDetails,
+      date: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    const updatedWallet = {
+      ...wallet,
+      balance: wallet.balance - amount,
+      pendingWithdrawals: (wallet.pendingWithdrawals || 0) + amount,
+      transactions: [transaction, ...(wallet.transactions || [])]
+    };
+
+    await updateTeacherWallet(teacherId, updatedWallet);
+    return updatedWallet;
+  } catch (error) {
+    console.error('Error withdrawing from wallet:', error);
+    throw error;
+  }
+};
+
+export const getTeacherPaymentStats = async (teacherId) => {
+  try {
+    const wallet = await getTeacherWallet(teacherId);
+    return {
+      totalEarnings: wallet.totalEarnings || 0,
+      availableBalance: wallet.balance || 0,
+      pendingWithdrawals: wallet.pendingWithdrawals || 0,
+      monthlyEarnings: 0, // Calculate based on transactions
+      totalSales: 0, // Calculate based on transactions
+      transactionHistory: wallet.transactions?.slice(0, 10) || []
+    };
+  } catch (error) {
+    console.error('Error getting teacher payment stats:', error);
+    throw error;
+  }
+};
+
+// ==================== MULTIMEDIA MANAGEMENT ====================
+
+export const addMultimediaToLesson = async (lessonId, multimediaData) => {
+  try {
+    await updateDoc(doc(db, 'lessons', lessonId), {
+      multimedia: arrayUnion(multimediaData)
+    });
+    return true;
+  } catch (error) {
+    console.error('Error adding multimedia to lesson:', error);
+    throw error;
+  }
+};
+
+export const deleteMultimediaFromLesson = async (lessonId, multimediaId) => {
+  try {
+    const lessonDoc = await getDoc(doc(db, 'lessons', lessonId));
+    if (!lessonDoc.exists()) throw new Error('Lesson not found');
+    const lessonData = lessonDoc.data();
+    const updatedMultimedia = lessonData.multimedia?.filter(m => m.id !== multimediaId) || [];
+    await updateDoc(doc(db, 'lessons', lessonId), {
+      multimedia: updatedMultimedia
+    });
+    return true;
+  } catch (error) {
+    console.error('Error deleting multimedia from lesson:', error);
+    throw error;
+  }
+};
+
+// ==================== QUIZ MANAGEMENT ====================
+
+export const addQuizToLesson = async (lessonId, quizData) => {
+  try {
+    await updateDoc(doc(db, 'lessons', lessonId), {
+      quiz: quizData
+    });
+    return true;
+  } catch (error) {
+    console.error('Error adding quiz to lesson:', error);
+    throw error;
+  }
+};
+
+export const saveQuizResult = async (studentId, courseId, lessonId, score, passed, totalQuestions) => {
   try {
     const userRef = doc(db, 'users', studentId);
     await updateDoc(userRef, {
-      enrolledCourses: arrayRemove(courseId),
-      updatedAt: serverTimestamp()
+      quizResults: arrayUnion({
+        courseId,
+        lessonId,
+        score,
+        passed,
+        totalQuestions,
+        completedAt: new Date().toISOString()
+      })
     });
-    return { success: true };
+    return true;
   } catch (error) {
-    console.error('Unenroll student error:', error);
+    console.error('Error saving quiz result:', error);
     throw error;
   }
 };
 
-const updateProgress = async (studentId, courseId, progress, completedLessonId = null) => {
+// ==================== CERTIFICATE FUNCTIONS ====================
+
+export const generateCertificate = async (studentId, courseId, completionDate) => {
   try {
-    const userRef = doc(db, 'users', studentId);
-    const userDoc = await getDoc(userRef);
+    const certificateId = `cert_${Date.now()}`;
+    const certificate = {
+      id: certificateId,
+      studentId,
+      courseId,
+      completionDate: completionDate || new Date().toISOString(),
+      issuedDate: new Date().toISOString(),
+      verificationCode: Math.random().toString(36).substring(2, 10).toUpperCase()
+    };
+
+    await updateDoc(doc(db, 'users', studentId), {
+      certificates: arrayUnion(certificate)
+    });
+
+    return certificate;
+  } catch (error) {
+    console.error('Error generating certificate:', error);
+    throw error;
+  }
+};
+
+export const verifyCertificate = async (certificateId, verificationCode) => {
+  try {
+    const q = query(collection(db, 'users'), where('certificates.id', '==', certificateId));
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      return { valid: false, message: 'Certificate not found' };
+    }
+    const userDoc = querySnapshot.docs[0];
+    const userData = userDoc.data();
+    const certificate = userData.certificates?.find(c => c.id === certificateId);
     
-    if (!userDoc.exists()) {
-      throw new Error('User not found');
+    if (!certificate) {
+      return { valid: false, message: 'Certificate not found' };
     }
 
-    const user = userDoc.data();
-    const currentProgress = user.progress || {};
-    const completedLessons = user.completedLessons || [];
+    if (certificate.verificationCode !== verificationCode) {
+      return { valid: false, message: 'Invalid verification code' };
+    }
+
+    return {
+      valid: true,
+      message: 'Certificate verified successfully',
+      certificate: certificate
+    };
+  } catch (error) {
+    console.error('Error verifying certificate:', error);
+    throw error;
+  }
+};
+
+// ==================== COURSE ENROLLMENT ====================
+
+export const enrollStudentInCourse = async (studentId, courseId) => {
+  try {
+    await updateDoc(doc(db, 'users', studentId), {
+      enrolledCourses: arrayUnion(courseId)
+    });
+    return true;
+  } catch (error) {
+    console.error('Error enrolling student in course:', error);
+    throw error;
+  }
+};
+
+export const updateCourseProgress = async (studentId, courseId, progress) => {
+  try {
+    await updateDoc(doc(db, 'users', studentId), {
+      [`progress.${courseId}`]: progress
+    });
+    return true;
+  } catch (error) {
+    console.error('Error updating course progress:', error);
+    throw error;
+  }
+};
+
+// ==================== PAYMENT TRANSACTIONS ====================
+
+export const processLessonPayment = async (studentId, teacherId, courseId, lessonId, amount) => {
+  try {
+    // Add transaction to payment collection
+    const paymentRef = doc(collection(db, 'payments'));
+    await setDoc(paymentRef, {
+      id: paymentRef.id,
+      studentId,
+      teacherId,
+      courseId,
+      lessonId,
+      amount,
+      status: 'completed',
+      createdAt: serverTimestamp()
+    });
+
+    // Add earnings to teacher
+    await addTeacherEarnings(teacherId, amount * 0.9, `Payment for lesson: ${lessonId}`, {
+      courseId,
+      lessonId,
+      studentId
+    });
+
+    // Purchase lesson for student
+    await purchaseLesson(studentId, courseId, lessonId, {
+      amount,
+      paymentId: paymentRef.id
+    });
+
+    return paymentRef.id;
+  } catch (error) {
+    console.error('Error processing lesson payment:', error);
+    throw error;
+  }
+};
+
+// ==================== FILE UPLOAD FUNCTIONS ====================
+
+export const uploadFile = async (file, path) => {
+  try {
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file);
     
-    currentProgress[courseId] = progress;
-    
-    if (completedLessonId && !completedLessons.includes(completedLessonId)) {
-      completedLessons.push(completedLessonId);
-      const points = (user.points || 0) + 10;
-      await updateDoc(userRef, {
-        progress: currentProgress,
-        completedLessons: completedLessons,
-        points: points,
-        updatedAt: serverTimestamp()
-      });
+    return new Promise((resolve, reject) => {
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log('Upload is ' + progress + '% done');
+        },
+        (error) => {
+          reject(error);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(downloadURL);
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+};
+
+export const getFileUrl = async (path) => {
+  try {
+    const storageRef = ref(storage, path);
+    const url = await getDownloadURL(storageRef);
+    return url;
+  } catch (error) {
+    console.error('Error getting file URL:', error);
+    throw error;
+  }
+};
+
+export const deleteFile = async (path) => {
+  try {
+    const storageRef = ref(storage, path);
+    await deleteObject(storageRef);
+    return true;
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    throw error;
+  }
+};
+
+// ==================== PLATFORM STATISTICS ====================
+
+export const getPlatformStats = async () => {
+  try {
+    const usersQuery = await getDocs(collection(db, 'users'));
+    const coursesQuery = await getDocs(collection(db, 'courses'));
+    const paymentsQuery = await getDocs(collection(db, 'payments'));
+
+    const totalUsers = usersQuery.size;
+    const totalCourses = coursesQuery.size;
+    const totalPayments = paymentsQuery.size;
+
+    const teachers = usersQuery.docs.filter(doc => doc.data().role === 'teacher').length;
+    const students = usersQuery.docs.filter(doc => doc.data().role === 'student').length;
+
+    return {
+      totalUsers,
+      totalStudents: students,
+      totalTeachers: teachers,
+      totalCourses,
+      totalPayments,
+      totalEarnings: paymentsQuery.docs.reduce((sum, doc) => sum + (doc.data().amount || 0), 0)
+    };
+  } catch (error) {
+    console.error('Error getting platform stats:', error);
+    throw error;
+  }
+};
+
+// ==================== REAL-TIME SUBSCRIPTIONS ====================
+
+export const subscribeToUser = (uid, callback) => {
+  const unsubscribe = onSnapshot(doc(db, 'users', uid), (doc) => {
+    if (doc.exists()) {
+      callback(doc.data());
     } else {
-      await updateDoc(userRef, {
-        progress: currentProgress,
-        updatedAt: serverTimestamp()
-      });
+      callback(null);
     }
-
-    return { success: true };
-  } catch (error) {
-    console.error('Update progress error:', error);
-    throw error;
-  }
-};
-// src/firebase/storageService.js
-// ==================== LESSON MANAGEMENT ====================
-
-const getLessons = async (courseId) => {
-  try {
-    const course = await getCourseById(courseId);
-    return course?.lessons || [];
-  } catch (error) {
-    console.error('Get lessons error:', error);
-    return [];
-  }
+  });
+  return unsubscribe;
 };
 
-// ✅ REMOVED 'export const' from here - now just 'const'
-const addLessonToCourse = async (courseId, lessonData) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
+export const subscribeToCourse = (courseId, callback) => {
+  const unsubscribe = onSnapshot(doc(db, 'courses', courseId), (doc) => {
+    if (doc.exists()) {
+      callback({ id: doc.id, ...doc.data() });
+    } else {
+      callback(null);
     }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const newLesson = {
-      id: lessons.length + 1,
-      ...lessonData,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(courseRef, {
-      lessons: [...lessons, newLesson],
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true, lesson: newLesson };
-  } catch (error) {
-    console.error('Add lesson error:', error);
-    throw error;
-  }
+  });
+  return unsubscribe;
 };
 
-// ✅ REMOVED 'export const' from here - now just 'const'
-const updateLesson = async (courseId, lessonId, updateData) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const lessonIndex = lessons.findIndex(l => l.id === lessonId);
-
-    if (lessonIndex === -1) {
-      throw new Error('Lesson not found');
-    }
-
-    lessons[lessonIndex] = {
-      ...lessons[lessonIndex],
-      ...updateData,
-      updatedAt: serverTimestamp()
-    };
-
-    await updateDoc(courseRef, {
-      lessons: lessons,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Update lesson error:', error);
-    throw error;
-  }
-};
-
-const deleteLesson = async (courseId, lessonId) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lessons = course.lessons || [];
-    const updatedLessons = lessons.filter(l => l.id !== lessonId);
-
-    await updateDoc(courseRef, {
-      lessons: updatedLessons,
-      updatedAt: serverTimestamp()
-    });
-
-    return { success: true };
-  } catch (error) {
-    console.error('Delete lesson error:', error);
-    throw error;
-  }
-};
-
-const addMultimediaToLesson = async (courseId, lessonId, multimediaItem) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-    
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lesson = course.lessons.find(l => l.id === lessonId);
-    if (!lesson) {
-      throw new Error('Lesson not found');
-    }
-
-    if (!lesson.multimedia) {
-      lesson.multimedia = [];
-    }
-
-    const newMultimediaItem = {
-      id: lesson.multimedia.length > 0 ? Math.max(...lesson.multimedia.map(m => m.id)) + 1 : 1,
-      ...multimediaItem
-    };
-
-    lesson.multimedia.push(newMultimediaItem);
-    course.updatedAt = serverTimestamp();
-
-    await updateDoc(courseRef, course);
-    return { success: true, multimedia: newMultimediaItem };
-  } catch (error) {
-    console.error('Add multimedia error:', error);
-    throw error;
-  }
-};
-
-const deleteMultimediaFromLesson = async (courseId, lessonId, multimediaId) => {
-  try {
-    const courseRef = doc(db, 'courses', courseId);
-    const courseDoc = await getDoc(courseRef);
-    
-    if (!courseDoc.exists()) {
-      throw new Error('Course not found');
-    }
-
-    const course = courseDoc.data();
-    const lesson = course.lessons.find(l => l.id === lessonId);
-    if (!lesson || !lesson.multimedia) {
-      throw new Error('Lesson or multimedia not found');
-    }
-
-    lesson.multimedia = lesson.multimedia.filter(item => item.id !== multimediaId);
-    course.updatedAt = serverTimestamp();
-
-    await updateDoc(courseRef, course);
-    return { success: true };
-  } catch (error) {
-    console.error('Delete multimedia error:', error);
-    throw error;
-  }
-};
-
-// ==================== EXPORT LIST ====================
+// ==================== EXPORTS ====================
 
 export {
-  // Auth
-  // registerUser, ❌ REMOVED - exported inline above
-  loginUser,
-  logoutUser,
-  getCurrentUser,
-  updateUserProfile,
-  resetPassword,
-  resendVerificationEmail,
-  listenToUser,
-  
-  // Admin
-  createAdminUser,
-  checkAdminExists,
-  getAdminUser,
-  
-  // Teachers
-  createTeacherUser,
-  approveTeacher,
-  rejectTeacher,
-  getTeachers,
-  getPendingTeachers,
-  getApprovedTeachers,
-  getTeacherWhatsAppUrl,
-  updateTeacherProfileWithWhatsApp,
-  getTeacherStats,
-  
-  // Courses
-  addCourse,
-  getCourses,
-  getCourseById,
-  getTeacherCourses,
-  updateCourse,
-  deleteCourse,
-  publishCourse,
-  
-  // Lessons
-  getLessons,
-  // addLessonToCourse, ❌ REMOVED - now only in export list below
-  // updateLesson, ❌ REMOVED - now only in export list below
-  deleteLesson,
-  addMultimediaToLesson,
-  deleteMultimediaFromLesson,
-  
-  // Enrollment
-  enrollStudent,
-  unenrollStudent,
-  updateProgress,
-  
-  // Purchases
-  purchaseLesson,
-  canAccessLesson,
-  
-  // Wallet
-  getTeacherWallet,
-  addTeacherEarnings,
-  withdrawFromWallet,
-  getTeacherWallets,
-  saveTeacherWallets,
-  
-  // Payments
-  processLessonPayment,
-  getPaymentTransactions,
-  savePaymentTransactions,
-  
-  // Admin
-  getAllCoursesForAdmin,
-  getCourseDetailsForAdmin,
-  deleteCourseAsAdmin,
-  deleteLessonAsAdmin,
-  getCourseAnalyticsForAdmin,
-  getTeacherCoursesForAdmin,
-  getPlatformStats,
-  getUsers,
-  deleteUser,
-  updateUser,
-  
-  // Student
-  getStudentById,
-  updateStudent,
-  
-  // Other
-  getStudents,
-  initializeStorage
+  auth,
+  db,
+  storage,
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  onAuthStateChanged,
+  ref,
+  getDownloadURL,
+  deleteObject,
+  uploadBytesResumable,
+  onSnapshot,
+  Timestamp
 };
-
