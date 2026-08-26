@@ -780,23 +780,6 @@ export const subscribeToCourse = (courseId, callback) => {
   return unsubscribe;
 };
 
-// ==================== USER PROFILE ====================
-
-export const updateUserProfile = async (uid, profileData) => {
-  try {
-    const userRef = doc(db, 'users', uid);
-
-    await updateDoc(userRef, {
-      ...profileData,
-      updatedAt: serverTimestamp()
-    });
-
-    return true;
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    throw error;
-  }
-};
 
 // ==================== EXPORTS ====================
 
