@@ -65,7 +65,7 @@ export const registerUserWithFirebase = async (email, password, userData) => {
     const user = userCredential.user;
 
     await sendEmailVerification(user);
-    
+
     if (userData.displayName) {
       await updateProfile(user, { displayName: userData.displayName });
     }
@@ -178,6 +178,33 @@ export const updateUserDataInFirestore = async (uid, data) => {
     return true;
   } catch (error) {
     console.error('Error updating user data in Firestore:', error);
+    throw error;
+  }
+};
+
+// ✅ USER PROFILE UPDATE
+export const updateUserProfile = async (uid, profileData) => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    
+    // Prepare data for Firestore
+    const firestoreData = {
+      ...profileData,
+      updatedAt: serverTimestamp()
+    };
+    
+    // If displayName is provided, update it in Auth too
+    if (profileData.displayName) {
+      const user = auth.currentUser;
+      if (user) {
+        await updateProfile(user, { displayName: profileData.displayName });
+      }
+    }
+    
+    await updateDoc(userRef, firestoreData);
+    return true;
+  } catch (error) {
+    console.error('Error updating user profile:', error);
     throw error;
   }
 };
@@ -317,11 +344,11 @@ export const purchaseLesson = async (studentId, courseId, lessonId, paymentData 
   try {
     const userRef = doc(db, 'users', studentId);
     await updateDoc(userRef, {
-      purchasedLessons: arrayUnion({ 
-        courseId, 
-        lessonId, 
-        purchasedAt: serverTimestamp(), 
-        ...paymentData 
+      purchasedLessons: arrayUnion({
+        courseId,
+        lessonId,
+        purchasedAt: serverTimestamp(),
+        ...paymentData
       })
     });
     return true;
@@ -336,7 +363,7 @@ export const canAccessLesson = async (studentId, courseId, lessonId) => {
     const userDoc = await getDoc(doc(db, 'users', studentId));
     if (!userDoc.exists()) return false;
     const userData = userDoc.data();
-    
+
     if (userData.purchasedLessons) {
       return userData.purchasedLessons.some(p => p.lessonId === lessonId && p.courseId === courseId);
     }
@@ -567,7 +594,7 @@ export const verifyCertificate = async (certificateId, verificationCode) => {
     const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data();
     const certificate = userData.certificates?.find(c => c.id === certificateId);
-    
+
     if (!certificate) {
       return { valid: false, message: 'Certificate not found' };
     }
@@ -665,7 +692,7 @@ export const uploadFileWithProgress = async (file, path, onProgress) => {
   try {
     const storageRef = ref(storage, path);
     const uploadTask = uploadBytesResumable(storageRef, file);
-    
+
     return new Promise((resolve, reject) => {
       uploadTask.on(
         'state_changed',
@@ -766,5 +793,7 @@ export const subscribeToCourse = (courseId, callback) => {
 export {
   auth,
   db,
-  storage
+  storage,
+  // Export the new function too
+  updateUserProfile
 };
