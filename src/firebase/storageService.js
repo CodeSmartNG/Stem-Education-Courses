@@ -14,23 +14,27 @@ import {
   getDocs,
   arrayUnion,
   arrayRemove,
+  increment,
   serverTimestamp,
+  onSnapshot,
+  addDoc,
+  Timestamp,
+  writeBatch,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+  uploadBytesResumable,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
-  onAuthStateChanged,
-  ref,
-  getDownloadURL,
-  deleteObject,
-  uploadBytesResumable,
-  onSnapshot,
-  Timestamp
+  onAuthStateChanged
 } from './config';
 
-// ==================== USER MANAGEMENT ====================
+// ==================== AUTH FUNCTIONS ====================
 
 export const getCurrentUser = () => {
   return new Promise((resolve, reject) => {
@@ -313,7 +317,12 @@ export const purchaseLesson = async (studentId, courseId, lessonId, paymentData 
   try {
     const userRef = doc(db, 'users', studentId);
     await updateDoc(userRef, {
-      purchasedLessons: arrayUnion({ courseId, lessonId, purchasedAt: serverTimestamp(), ...paymentData })
+      purchasedLessons: arrayUnion({ 
+        courseId, 
+        lessonId, 
+        purchasedAt: serverTimestamp(), 
+        ...paymentData 
+      })
     });
     return true;
   } catch (error) {
@@ -328,7 +337,6 @@ export const canAccessLesson = async (studentId, courseId, lessonId) => {
     if (!userDoc.exists()) return false;
     const userData = userDoc.data();
     
-    // Check if lesson is in purchasedLessons
     if (userData.purchasedLessons) {
       return userData.purchasedLessons.some(p => p.lessonId === lessonId && p.courseId === courseId);
     }
@@ -450,8 +458,8 @@ export const getTeacherPaymentStats = async (teacherId) => {
       totalEarnings: wallet.totalEarnings || 0,
       availableBalance: wallet.balance || 0,
       pendingWithdrawals: wallet.pendingWithdrawals || 0,
-      monthlyEarnings: 0, // Calculate based on transactions
-      totalSales: 0, // Calculate based on transactions
+      monthlyEarnings: 0,
+      totalSales: 0,
       transactionHistory: wallet.transactions?.slice(0, 10) || []
     };
   } catch (error) {
@@ -609,7 +617,6 @@ export const updateCourseProgress = async (studentId, courseId, progress) => {
 
 export const processLessonPayment = async (studentId, teacherId, courseId, lessonId, amount) => {
   try {
-    // Add transaction to payment collection
     const paymentRef = doc(collection(db, 'payments'));
     await setDoc(paymentRef, {
       id: paymentRef.id,
@@ -622,14 +629,12 @@ export const processLessonPayment = async (studentId, teacherId, courseId, lesso
       createdAt: serverTimestamp()
     });
 
-    // Add earnings to teacher
     await addTeacherEarnings(teacherId, amount * 0.9, `Payment for lesson: ${lessonId}`, {
       courseId,
       lessonId,
       studentId
     });
 
-    // Purchase lesson for student
     await purchaseLesson(studentId, courseId, lessonId, {
       amount,
       paymentId: paymentRef.id
@@ -647,6 +652,18 @@ export const processLessonPayment = async (studentId, teacherId, courseId, lesso
 export const uploadFile = async (file, path) => {
   try {
     const storageRef = ref(storage, path);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    throw error;
+  }
+};
+
+export const uploadFileWithProgress = async (file, path, onProgress) => {
+  try {
+    const storageRef = ref(storage, path);
     const uploadTask = uploadBytesResumable(storageRef, file);
     
     return new Promise((resolve, reject) => {
@@ -654,11 +671,9 @@ export const uploadFile = async (file, path) => {
         'state_changed',
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          console.log('Upload is ' + progress + '% done');
+          if (onProgress) onProgress(progress);
         },
-        (error) => {
-          reject(error);
-        },
+        (error) => reject(error),
         async () => {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           resolve(downloadURL);
@@ -666,7 +681,7 @@ export const uploadFile = async (file, path) => {
       );
     });
   } catch (error) {
-    console.error('Error uploading file:', error);
+    console.error('Error uploading file with progress:', error);
     throw error;
   }
 };
@@ -751,30 +766,5 @@ export const subscribeToCourse = (courseId, callback) => {
 export {
   auth,
   db,
-  storage,
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-  arrayUnion,
-  arrayRemove,
-  serverTimestamp,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  sendEmailVerification,
-  sendPasswordResetEmail,
-  updateProfile,
-  onAuthStateChanged,
-  ref,
-  getDownloadURL,
-  deleteObject,
-  uploadBytesResumable,
-  onSnapshot,
-  Timestamp
+  storage
 };
