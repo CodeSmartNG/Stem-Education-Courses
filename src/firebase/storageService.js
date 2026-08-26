@@ -1,4 +1,5 @@
 // src/firebase/storageService.js
+
 import {
   auth,
   db,
@@ -13,13 +14,8 @@ import {
   where,
   getDocs,
   arrayUnion,
-  arrayRemove,
-  increment,
   serverTimestamp,
   onSnapshot,
-  addDoc,
-  Timestamp,
-  writeBatch,
   ref,
   uploadBytes,
   getDownloadURL,
@@ -29,7 +25,6 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendEmailVerification,
-  sendPasswordResetEmail,
   updateProfile,
   onAuthStateChanged
 } from './config';
