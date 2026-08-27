@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   getCurrentUser,
-  updateUserDataInFirestore, // ✅ Canja zuwa wannan
+  updateUserDataInFirestore,
   uploadFile
 } from '../firebase/storageService';
 import './StudentProfile.css';
@@ -18,8 +18,6 @@ const StudentProfile = ({ student, setStudent }) => {
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // ==================== INITIALIZE FORM ====================
-
   useEffect(() => {
     if (student) {
       setFormData({
@@ -31,29 +29,19 @@ const StudentProfile = ({ student, setStudent }) => {
         location: student.location || '',
         interests: student.interests || ''
       });
-
-      setImagePreview(
-        student.photoURL ||
-        student.profileImage ||
-        null
-      );
-
+      setImagePreview(student.photoURL || student.profileImage || null);
       setProfileImage(null);
     }
   }, [student]);
 
-  // ==================== HANDLE FORM SUBMIT ====================
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-
     setLoading(true);
     setMessage('');
     setError('');
 
     try {
       const currentUser = await getCurrentUser();
-
       if (!currentUser) {
         throw new Error('Please log in to update your profile.');
       }
@@ -61,8 +49,6 @@ const StudentProfile = ({ student, setStudent }) => {
       if (student?.uid && currentUser.uid !== student.uid) {
         throw new Error('You are not authorized to update this profile.');
       }
-
-      // ==================== PROFILE DATA ====================
 
       const profileData = {
         displayName: formData.name?.trim() || '',
@@ -74,34 +60,32 @@ const StudentProfile = ({ student, setStudent }) => {
         interests: formData.interests?.trim() || ''
       };
 
-      // ==================== PROFILE IMAGE ====================
-
+      // Handle profile image upload
       if (profileImage instanceof File) {
         setIsUploading(true);
-
         const filePath = `profiles/${currentUser.uid}/profile.jpg`;
-
-        const imageUrl = await uploadFile(
-          profileImage,
-          filePath
-        );
-
+        const imageUrl = await uploadFile(profileImage, filePath);
         profileData.photoURL = imageUrl;
         profileData.profileImage = imageUrl;
-
         setImagePreview(imageUrl);
       }
 
-      // ==================== UPDATE FIRESTORE ====================
+      // ==================== ✅ UPDATE FIRESTORE ====================
+      await updateUserDataInFirestore(currentUser.uid, {
+        displayName: profileData.displayName,
+        name: profileData.name,
+        level: profileData.level,
+        bio: profileData.bio,
+        phone: profileData.phone,
+        location: profileData.location,
+        interests: profileData.interests,
+        photoURL: profileData.photoURL || student.photoURL,
+        profileImage: profileData.profileImage || student.profileImage,
+        updatedAt: new Date().toISOString()
+      });
+      // ==========================================================
 
-      // ✅ Yi amfani da updateUserDataInFirestore
-      await updateUserDataInFirestore(
-        currentUser.uid,
-        profileData
-      );
-
-      // ==================== UPDATE LOCAL STATE ====================
-
+      // Update local state
       const updatedStudent = {
         ...student,
         displayName: profileData.displayName,
@@ -111,19 +95,16 @@ const StudentProfile = ({ student, setStudent }) => {
         phone: profileData.phone,
         location: profileData.location,
         interests: profileData.interests,
-        photoURL: profileData.photoURL || student.photoURL || null,
-        profileImage: profileData.profileImage || student.profileImage || null
+        photoURL: profileData.photoURL || student.photoURL,
+        profileImage: profileData.profileImage || student.profileImage
       };
 
       setStudent(updatedStudent);
       setProfileImage(null);
-
       setMessage('✅ Profile updated successfully!');
       setIsEditing(false);
 
-      setTimeout(() => {
-        setMessage('');
-      }, 3000);
+      setTimeout(() => setMessage(''), 3000);
 
     } catch (error) {
       console.error('Error updating profile:', error);
@@ -134,8 +115,6 @@ const StudentProfile = ({ student, setStudent }) => {
     }
   };
 
-  // ==================== HANDLE INPUT CHANGE ====================
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -144,14 +123,9 @@ const StudentProfile = ({ student, setStudent }) => {
     }));
   };
 
-  // ==================== HANDLE IMAGE CHANGE ====================
-
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
+    if (!file) return;
 
     setError('');
     setMessage('');
@@ -172,22 +146,17 @@ const StudentProfile = ({ student, setStudent }) => {
     setIsUploading(true);
 
     const reader = new FileReader();
-
     reader.onloadend = () => {
       setImagePreview(reader.result);
       setIsUploading(false);
     };
-
     reader.onerror = () => {
       setError('Failed to load image.');
       setIsUploading(false);
       setProfileImage(null);
     };
-
     reader.readAsDataURL(file);
   };
-
-  // ==================== CANCEL EDIT ====================
 
   const handleCancel = () => {
     setIsEditing(false);
@@ -205,12 +174,9 @@ const StudentProfile = ({ student, setStudent }) => {
         location: student.location || '',
         interests: student.interests || ''
       });
-
       setImagePreview(student.photoURL || student.profileImage || null);
     }
   };
-
-  // ==================== SAFETY CHECK ====================
 
   if (!student) {
     return (
@@ -221,57 +187,32 @@ const StudentProfile = ({ student, setStudent }) => {
     );
   }
 
-  // ==================== PROGRESS ====================
-
   const progress = student.progress || {};
   const progressValues = Object.values(progress);
-
-  const totalProgress =
-    progressValues.length > 0
-      ? progressValues.reduce((total, value) => total + Number(value || 0), 0) / progressValues.length
-      : 0;
+  const totalProgress = progressValues.length > 0
+    ? progressValues.reduce((total, value) => total + Number(value || 0), 0) / progressValues.length
+    : 0;
 
   const completedLessons = student.completedLessons?.length || 0;
   const totalLessons = progressValues.length * 3;
 
-  // ==================== INITIALS ====================
-
   const getInitials = () => {
     const name = student.displayName || student.name || '';
     if (!name) return '?';
-    return name
-      .trim()
-      .split(/\s+/)
-      .map((word) => word[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+    return name.trim().split(/\s+/).map((word) => word[0]).join('').toUpperCase().slice(0, 2);
   };
-
-  // ==================== RENDER ====================
 
   return (
     <div className="student-profile">
-
-      {/* HEADER */}
       <div className="profile-header">
         <h2>👤 Student Profile</h2>
         {!isEditing && (
-          <button
-            type="button"
-            onClick={() => {
-              setError('');
-              setMessage('');
-              setIsEditing(true);
-            }}
-            className="edit-profile-btn"
-          >
+          <button type="button" onClick={() => { setError(''); setMessage(''); setIsEditing(true); }} className="edit-profile-btn">
             ✏️ Edit Profile
           </button>
         )}
       </div>
 
-      {/* MESSAGES */}
       {message && (
         <div className="success-message">
           <span className="success-icon">✅</span>
@@ -287,7 +228,6 @@ const StudentProfile = ({ student, setStudent }) => {
         </div>
       )}
 
-      {/* VIEW MODE */}
       {!isEditing ? (
         <div className="profile-view">
           <div className="profile-avatar-section">
@@ -305,7 +245,6 @@ const StudentProfile = ({ student, setStudent }) => {
             </div>
           </div>
 
-          {/* DETAILS GRID */}
           <div className="profile-details-grid">
             <div className="detail-card">
               <div className="detail-icon">📚</div>
@@ -337,7 +276,6 @@ const StudentProfile = ({ student, setStudent }) => {
             </div>
           </div>
 
-          {/* BIO */}
           {student.bio && (
             <div className="bio-section">
               <h4>About Me</h4>
@@ -345,7 +283,6 @@ const StudentProfile = ({ student, setStudent }) => {
             </div>
           )}
 
-          {/* INTERESTS */}
           {student.interests && (
             <div className="interests-section">
               <h4>Interests</h4>
@@ -357,7 +294,6 @@ const StudentProfile = ({ student, setStudent }) => {
             </div>
           )}
 
-          {/* COURSE PROGRESS */}
           <div className="progress-section">
             <h3>📈 Course Progress</h3>
             {Object.entries(progress).length === 0 ? (
@@ -370,19 +306,13 @@ const StudentProfile = ({ student, setStudent }) => {
                     <span>{Number(courseProgress || 0)}%</span>
                   </div>
                   <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, Number(courseProgress || 0)))}%`
-                      }}
-                    />
+                    <div className="progress-fill" style={{ width: `${Math.min(100, Math.max(0, Number(courseProgress || 0)))}%` }} />
                   </div>
                 </div>
               ))
             )}
           </div>
 
-          {/* BADGES */}
           {student.badges && student.badges.length > 0 && (
             <div className="badges-section">
               <h3>🏅 Achievements</h3>
@@ -397,17 +327,12 @@ const StudentProfile = ({ student, setStudent }) => {
             </div>
           )}
 
-          {/* META */}
           <div className="profile-meta">
             <p className="meta-item">
               <span className="meta-label">Member since:</span>
               <span className="meta-value">
                 {student.joinedDate
-                  ? new Date(student.joinedDate).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })
+                  ? new Date(student.joinedDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
                   : 'N/A'}
               </span>
             </p>
@@ -426,9 +351,7 @@ const StudentProfile = ({ student, setStudent }) => {
           </div>
         </div>
       ) : (
-        // EDIT MODE
         <form onSubmit={handleSubmit} className="profile-form">
-          {/* PROFILE IMAGE */}
           <div className="form-group">
             <label>Profile Image</label>
             <div className="image-upload-container">
@@ -442,59 +365,27 @@ const StudentProfile = ({ student, setStudent }) => {
                   </div>
                 )}
                 <label className="image-upload-label">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    disabled={loading || isUploading}
-                    className="image-input"
-                  />
+                  <input type="file" accept="image/*" onChange={handleImageChange} disabled={loading || isUploading} className="image-input" />
                   {isUploading ? 'Processing...' : 'Change Photo'}
                 </label>
               </div>
             </div>
           </div>
 
-          {/* NAME */}
           <div className="form-group">
             <label htmlFor="name">Full Name</label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name || ''}
-              onChange={handleChange}
-              required
-              disabled={loading}
-              placeholder="Enter your full name"
-            />
+            <input type="text" id="name" name="name" value={formData.name || ''} onChange={handleChange} required disabled={loading} placeholder="Enter your full name" />
           </div>
 
-          {/* EMAIL */}
           <div className="form-group">
             <label htmlFor="email">Email Address</label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email || ''}
-              required
-              disabled
-              placeholder="Your email"
-            />
+            <input type="email" id="email" name="email" value={formData.email || ''} required disabled placeholder="Your email" />
             <small className="help-text">Email cannot be changed</small>
           </div>
 
-          {/* LEVEL */}
           <div className="form-group">
             <label htmlFor="level">Level</label>
-            <select
-              id="level"
-              name="level"
-              value={formData.level || 'Beginner'}
-              onChange={handleChange}
-              disabled={loading}
-            >
+            <select id="level" name="level" value={formData.level || 'Beginner'} onChange={handleChange} disabled={loading}>
               <option value="Beginner">Beginner</option>
               <option value="Intermediate">Intermediate</option>
               <option value="Advanced">Advanced</option>
@@ -502,64 +393,27 @@ const StudentProfile = ({ student, setStudent }) => {
             </select>
           </div>
 
-          {/* BIO */}
           <div className="form-group">
             <label htmlFor="bio">About Me</label>
-            <textarea
-              id="bio"
-              name="bio"
-              value={formData.bio || ''}
-              onChange={handleChange}
-              disabled={loading}
-              placeholder="Tell us about yourself"
-              rows="4"
-            />
+            <textarea id="bio" name="bio" value={formData.bio || ''} onChange={handleChange} disabled={loading} placeholder="Tell us about yourself" rows="4" />
           </div>
 
-          {/* PHONE */}
           <div className="form-group">
             <label htmlFor="phone">Phone Number</label>
-            <input
-              type="tel"
-              id="phone"
-              name="phone"
-              value={formData.phone || ''}
-              onChange={handleChange}
-              disabled={loading}
-              placeholder="Enter your phone number"
-            />
+            <input type="tel" id="phone" name="phone" value={formData.phone || ''} onChange={handleChange} disabled={loading} placeholder="Enter your phone number" />
           </div>
 
-          {/* LOCATION */}
           <div className="form-group">
             <label htmlFor="location">Location</label>
-            <input
-              type="text"
-              id="location"
-              name="location"
-              value={formData.location || ''}
-              onChange={handleChange}
-              disabled={loading}
-              placeholder="Enter your location"
-            />
+            <input type="text" id="location" name="location" value={formData.location || ''} onChange={handleChange} disabled={loading} placeholder="Enter your location" />
           </div>
 
-          {/* INTERESTS */}
           <div className="form-group">
             <label htmlFor="interests">Interests</label>
-            <input
-              type="text"
-              id="interests"
-              name="interests"
-              value={formData.interests || ''}
-              onChange={handleChange}
-              disabled={loading}
-              placeholder="e.g., Web Development, Python, AI"
-            />
+            <input type="text" id="interests" name="interests" value={formData.interests || ''} onChange={handleChange} disabled={loading} placeholder="e.g., Web Development, Python, AI" />
             <small className="help-text">Separate interests with commas</small>
           </div>
 
-          {/* ACTIONS */}
           <div className="form-actions">
             <button type="submit" className="save-btn" disabled={loading || isUploading}>
               {loading ? (
@@ -571,9 +425,7 @@ const StudentProfile = ({ student, setStudent }) => {
                 '💾 Save Changes'
               )}
             </button>
-            <button type="button" onClick={handleCancel} className="cancel-btn" disabled={loading}>
-              Cancel
-            </button>
+            <button type="button" onClick={handleCancel} className="cancel-btn" disabled={loading}>Cancel</button>
           </div>
         </form>
       )}
