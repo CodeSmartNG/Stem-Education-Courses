@@ -788,7 +788,7 @@ export {
   db,
   storage,
   // Auth functions
-  getCurrentUser,
+  //getCurrentUser, //remove 
   registerUserWithFirebase,
   checkEmailVerification,
   resendVerificationEmail,
