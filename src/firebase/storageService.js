@@ -789,7 +789,7 @@ export {
   storage,
   // Auth functions
   //getCurrentUser, //remove 
-  registerUserWithFirebase,
+  //registerUserWithFirebase,//remove 
   checkEmailVerification,
   resendVerificationEmail,
   loginWithFirebase,
