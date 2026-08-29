@@ -783,7 +783,7 @@ export const subscribeToCourse = (courseId, callback) => {
 
 // ==================== EXPORTS ====================
 
-export {
+//export {
   auth,
   db,
   storage,
@@ -793,8 +793,8 @@ export {
   //checkEmailVerification,//remove 
   //resendVerificationEmail,//remove 
   //loginWithFirebase,//remove 
-  logoutFromFirebase,
-  getCurrentFirebaseUser,
+  //logoutFromFirebase,
+  //getCurrentFirebaseUser,
   syncUserDataToLocal,
   updateUserDataInFirestore,
   //updateUserProfile, //remove 
