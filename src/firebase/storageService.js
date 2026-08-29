@@ -844,7 +844,6 @@ export {
   //updateCourse,
   //deleteCourse,
   // Lesson functions
-    updateProgress,
   //saveLesson,
   //getLessons,
   //updateLesson,
