@@ -792,7 +792,7 @@ export {
   //registerUserWithFirebase,//remove 
   //checkEmailVerification,//remove 
   //resendVerificationEmail,//remove 
-  loginWithFirebase,
+  //loginWithFirebase,//remove 
   logoutFromFirebase,
   getCurrentFirebaseUser,
   syncUserDataToLocal,
