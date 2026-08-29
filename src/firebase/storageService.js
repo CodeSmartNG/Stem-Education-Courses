@@ -201,6 +201,45 @@ export const updateUserProfile = async (uid, profileData) => {
   }
 };
 
+
+
+
+
+// ==================== STUDENT PROGRESS ====================
+
+export const updateProgress = async (
+  studentId,
+  courseId,
+  progress,
+  completedLessonId = null
+) => {
+  try {
+    const userRef = doc(db, 'users', studentId);
+
+    const updateData = {
+      [`progress.${courseId}`]: progress,
+      updatedAt: serverTimestamp()
+    };
+
+    // Add completed lesson if provided
+    if (completedLessonId) {
+      updateData.completedLessons = arrayUnion(
+        completedLessonId
+      );
+    }
+
+    await updateDoc(userRef, updateData);
+
+    return true;
+  } catch (error) {
+    console.error(
+      'Error updating student progress:',
+      error
+    );
+    throw error;
+  }
+};
+
 // ==================== COURSE MANAGEMENT ====================
 
 export const saveCourse = async (courseData) => {
