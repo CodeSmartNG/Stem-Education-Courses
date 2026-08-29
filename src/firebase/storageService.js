@@ -783,7 +783,7 @@ export const subscribeToCourse = (courseId, callback) => {
 
 // ==================== EXPORTS ====================
 
-//export {
+export {
   auth,
   db,
   storage,
@@ -795,52 +795,52 @@ export const subscribeToCourse = (courseId, callback) => {
   //loginWithFirebase,//remove 
   //logoutFromFirebase,
   //getCurrentFirebaseUser,
-  syncUserDataToLocal,
-  updateUserDataInFirestore,
+  //syncUserDataToLocal,
+  //updateUserDataInFirestore,
   //updateUserProfile, //remove 
   // Course functions
-  saveCourse,
-  getCourses,
-  getCourseByKey,
-  updateCourse,
-  deleteCourse,
+  //saveCourse,
+  //getCourses,
+  //getCourseByKey,
+  //updateCourse,
+  //deleteCourse,
   // Lesson functions
-  saveLesson,
-  getLessons,
-  updateLesson,
-  deleteLesson,
+  //saveLesson,
+  //getLessons,
+  //updateLesson,
+  //deleteLesson,
   // Purchase functions
-  purchaseLesson,
-  canAccessLesson,
-  hasStudentPurchasedLesson,
+  //purchaseLesson,
+  //canAccessLesson,
+  //hasStudentPurchasedLesson,
   // Wallet functions
-  getTeacherWallet,
-  updateTeacherWallet,
-  addTeacherEarnings,
-  withdrawFromWallet,
-  getTeacherPaymentStats,
+  //getTeacherWallet,
+  //updateTeacherWallet,
+  //addTeacherEarnings,
+  //withdrawFromWallet,
+  //getTeacherPaymentStats,
   // Multimedia functions
-  addMultimediaToLesson,
-  deleteMultimediaFromLesson,
+  //addMultimediaToLesson,
+  //deleteMultimediaFromLesson,
   // Quiz functions
-  addQuizToLesson,
-  saveQuizResult,
+  //addQuizToLesson,
+  //saveQuizResult,
   // Certificate functions
-  generateCertificate,
-  verifyCertificate,
+  //generateCertificate,
+  //verifyCertificate,
   // Enrollment functions
-  enrollStudentInCourse,
-  updateCourseProgress,
+  //enrollStudentInCourse,
+  //updateCourseProgress,
   // Payment functions
-  processLessonPayment,
+  //processLessonPayment,
   // File functions
-  uploadFile,
-  uploadFileWithProgress,
-  getFileUrl,
-  deleteFile,
+  //uploadFile,
+  //uploadFileWithProgress,
+  //getFileUrl,
+  //deleteFile,
   // Stats functions
-  getPlatformStats,
+  //getPlatformStats,
   // Subscription functions
-  subscribeToUser,
-  subscribeToCourse
+  //subscribeToUser,
+  //subscribeToCourse
 };
