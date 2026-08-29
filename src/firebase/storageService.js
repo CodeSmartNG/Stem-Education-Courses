@@ -790,7 +790,7 @@ export {
   // Auth functions
   //getCurrentUser, //remove 
   //registerUserWithFirebase,//remove 
-  checkEmailVerification,
+  //checkEmailVerification,//remove 
   resendVerificationEmail,
   loginWithFirebase,
   logoutFromFirebase,
