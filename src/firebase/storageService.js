@@ -805,7 +805,7 @@ export {
   //updateCourse,
   //deleteCourse,
   // Lesson functions
-    updateProgress
+    updateProgress,
   //saveLesson,
   //getLessons,
   //updateLesson,
