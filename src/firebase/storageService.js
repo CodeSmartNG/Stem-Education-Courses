@@ -791,7 +791,7 @@ export {
   //getCurrentUser, //remove 
   //registerUserWithFirebase,//remove 
   //checkEmailVerification,//remove 
-  resendVerificationEmail,
+  //resendVerificationEmail,//remove 
   loginWithFirebase,
   logoutFromFirebase,
   getCurrentFirebaseUser,
