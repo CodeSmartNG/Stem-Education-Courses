@@ -870,6 +870,7 @@ export {
   // Enrollment functions
   //enrollStudentInCourse,
   //updateCourseProgress,
+    updateProgress, 
   // Payment functions
   //processLessonPayment,
   // File functions
