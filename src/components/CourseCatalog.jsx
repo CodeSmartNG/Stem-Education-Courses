@@ -7,8 +7,8 @@ import {
   getTeacherWhatsAppUrl,
   getLessons,
   updateProgress,
-  enrollStudent,
-  getCourseById
+  enrollStudentInCourse,
+  getCourseByKey
 } from '../firebase/storageService';
 
 import Quiz from './Quiz';
@@ -132,7 +132,7 @@ const CourseCatalog = ({ student, setStudent }) => {
     try {
       if (!selectedCourse || !courses[selectedCourse]) return;
 
-      const currentUser = getCurrentUser();
+      const currentUser = await getCurrentUser();
       if (!currentUser) {
         console.error('No user logged in');
         return;
@@ -182,7 +182,7 @@ const CourseCatalog = ({ student, setStudent }) => {
 
   // Check if student can access lesson
   const canAccessLessonContent = async (courseKey, lessonId) => {
-    const currentUser = getCurrentUser();
+    const currentUser = await getCurrentUser();
     if (!currentUser) return false;
     return await canAccessLesson(currentUser.uid, courseKey, lessonId);
   };
@@ -190,7 +190,7 @@ const CourseCatalog = ({ student, setStudent }) => {
   // Handle lesson purchase
   const handlePurchaseLesson = async (courseKey, lessonIndex) => {
     try {
-      const currentUser = getCurrentUser();
+      const currentUser = await getCurrentUser();
       if (!currentUser) {
         alert('Please log in to purchase lessons');
         return;
@@ -340,7 +340,7 @@ const CourseCatalog = ({ student, setStudent }) => {
     try {
       if (!courses || !courses[courseKey]) return;
 
-      const currentUser = getCurrentUser();
+      const currentUser = await getCurrentUser();
       if (!currentUser) {
         alert('Please log in to complete lessons');
         return;
@@ -386,6 +386,24 @@ const CourseCatalog = ({ student, setStudent }) => {
   // Get teacher WhatsApp URL
   const getTeacherContactUrl = (teacherId) => {
     return getTeacherWhatsAppUrl(teacherId);
+  };
+
+  // Handle enroll student
+  const handleEnrollStudent = async (courseId) => {
+    try {
+      const currentUser = await getCurrentUser();
+      if (!currentUser) {
+        alert('Please log in to enroll');
+        return;
+      }
+      
+      await enrollStudentInCourse(currentUser.uid, courseId);
+      alert('✅ Successfully enrolled in course!');
+      await loadCourses();
+    } catch (error) {
+      console.error('Error enrolling:', error);
+      alert('❌ Failed to enroll: ' + error.message);
+    }
   };
 
   // Safety check for empty courses
