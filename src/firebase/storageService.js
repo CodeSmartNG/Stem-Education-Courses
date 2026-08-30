@@ -32,25 +32,11 @@ import {
 // ==================== AUTH FUNCTIONS ====================
 
 export const getCurrentUser = () => {
-  return new Promise((resolve, reject) => {
-    try {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        unsubscribe();
-        if (user) {
-          resolve({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
-            emailVerified: user.emailVerified
-          });
-        } else {
-          resolve(null);
-        }
-      });
-    } catch (error) {
-      reject(error);
-    }
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
   });
 };
 
@@ -142,15 +128,6 @@ export const logoutFromFirebase = async () => {
   }
 };
 
-export const getCurrentFirebaseUser = () => {
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      unsubscribe();
-      resolve(user);
-    });
-  });
-};
-
 export const syncUserDataToLocal = async (uid) => {
   try {
     const userDoc = await getDoc(doc(db, 'users', uid));
@@ -161,19 +138,6 @@ export const syncUserDataToLocal = async (uid) => {
   } catch (error) {
     console.error('Error syncing user data:', error);
     return null;
-  }
-};
-
-export const updateUserDataInFirestore = async (uid, data) => {
-  try {
-    await updateDoc(doc(db, 'users', uid), {
-      ...data,
-      updatedAt: serverTimestamp()
-    });
-    return true;
-  } catch (error) {
-    console.error('Error updating user data in Firestore:', error);
-    throw error;
   }
 };
 
@@ -201,10 +165,6 @@ export const updateUserProfile = async (uid, profileData) => {
   }
 };
 
-
-
-
-
 // ==================== STUDENT PROGRESS ====================
 
 export const updateProgress = async (
@@ -221,21 +181,14 @@ export const updateProgress = async (
       updatedAt: serverTimestamp()
     };
 
-    // Add completed lesson if provided
     if (completedLessonId) {
-      updateData.completedLessons = arrayUnion(
-        completedLessonId
-      );
+      updateData.completedLessons = arrayUnion(completedLessonId);
     }
 
     await updateDoc(userRef, updateData);
-
     return true;
   } catch (error) {
-    console.error(
-      'Error updating student progress:',
-      error
-    );
+    console.error('Error updating student progress:', error);
     throw error;
   }
 };
@@ -403,10 +356,6 @@ export const canAccessLesson = async (studentId, courseId, lessonId) => {
     console.error('Error checking lesson access:', error);
     return false;
   }
-};
-
-export const hasStudentPurchasedLesson = async (studentId, courseId, lessonId) => {
-  return canAccessLesson(studentId, courseId, lessonId);
 };
 
 // ==================== TEACHER WALLET ====================
@@ -659,18 +608,6 @@ export const enrollStudentInCourse = async (studentId, courseId) => {
   }
 };
 
-export const updateCourseProgress = async (studentId, courseId, progress) => {
-  try {
-    await updateDoc(doc(db, 'users', studentId), {
-      [`progress.${courseId}`]: progress
-    });
-    return true;
-  } catch (error) {
-    console.error('Error updating course progress:', error);
-    throw error;
-  }
-};
-
 // ==================== PAYMENT TRANSACTIONS ====================
 
 export const processLessonPayment = async (studentId, teacherId, courseId, lessonId, amount) => {
@@ -817,70 +754,4 @@ export const subscribeToCourse = (courseId, callback) => {
     }
   });
   return unsubscribe;
-};
-
-
-// ==================== EXPORTS ====================
-
-export {
-  auth,
-  db,
-  storage,
-  // Auth functions
-  //getCurrentUser, //remove 
-  //registerUserWithFirebase,//remove 
-  //checkEmailVerification,//remove 
-  //resendVerificationEmail,//remove 
-  //loginWithFirebase,//remove 
-  //logoutFromFirebase,
-  //getCurrentFirebaseUser,
-  //syncUserDataToLocal,
-  //updateUserDataInFirestore,
-  //updateUserProfile, //remove 
-  // Course functions
-  //saveCourse,
-  //getCourses,
-  //getCourseByKey,
-  //updateCourse,
-  //deleteCourse,
-  // Lesson functions
-  //saveLesson,
-  //getLessons,
-  //updateLesson,
-  //deleteLesson,
-  // Purchase functions
-  //purchaseLesson,
-  //canAccessLesson,
-  //hasStudentPurchasedLesson,
-  // Wallet functions
-  //getTeacherWallet,
-  //updateTeacherWallet,
-  //addTeacherEarnings,
-  //withdrawFromWallet,
-  //getTeacherPaymentStats,
-  // Multimedia functions
-  //addMultimediaToLesson,
-  //deleteMultimediaFromLesson,
-  // Quiz functions
-  //addQuizToLesson,
-  //saveQuizResult,
-  // Certificate functions
-  //generateCertificate,
-  //verifyCertificate,
-  // Enrollment functions
-  //enrollStudentInCourse,
-  //updateCourseProgress,
-    updateProgress, 
-  // Payment functions
-  //processLessonPayment,
-  // File functions
-  //uploadFile,
-  //uploadFileWithProgress,
-  //getFileUrl,
-  //deleteFile,
-  // Stats functions
-  //getPlatformStats,
-  // Subscription functions
-  //subscribeToUser,
-  //subscribeToCourse
 };
