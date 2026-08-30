@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   getCurrentUser,
-  updateUserDataInFirestore,
+  updateUserProfile,
   uploadFile
 } from '../firebase/storageService';
 import './StudentProfile.css';
@@ -71,7 +71,7 @@ const StudentProfile = ({ student, setStudent }) => {
       }
 
       // ==================== ✅ UPDATE FIRESTORE ====================
-      await updateUserDataInFirestore(currentUser.uid, {
+      await updateUserProfile(currentUser.uid, {
         displayName: profileData.displayName,
         name: profileData.name,
         level: profileData.level,
@@ -80,8 +80,7 @@ const StudentProfile = ({ student, setStudent }) => {
         location: profileData.location,
         interests: profileData.interests,
         photoURL: profileData.photoURL || student.photoURL,
-        profileImage: profileData.profileImage || student.profileImage,
-        updatedAt: new Date().toISOString()
+        profileImage: profileData.profileImage || student.profileImage
       });
       // ==========================================================
 
