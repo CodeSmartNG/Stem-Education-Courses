@@ -1,5 +1,5 @@
 // src/components/StudentProfile.jsx
-
+//update 
 import React, { useState, useEffect } from 'react';
 import {
   getCurrentUser,
