@@ -165,6 +165,9 @@ export const updateUserProfile = async (uid, profileData) => {
   }
 };
 
+// Export alias for backward compatibility
+export const updateUserDataInFirestore = updateUserProfile;
+
 // ==================== STUDENT PROGRESS ====================
 
 export const updateProgress = async (
