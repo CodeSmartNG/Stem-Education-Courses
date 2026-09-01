@@ -758,3 +758,58 @@ export const subscribeToCourse = (courseId, callback) => {
   });
   return unsubscribe;
 };
+
+// src/firebase/storageService.js
+
+// ==================== EXPORTS ====================
+
+export {
+  auth,
+  db,
+  storage,
+  getCurrentUser,
+  registerUserWithFirebase,
+  checkEmailVerification,
+  resendVerificationEmail,
+  loginWithFirebase,
+  logoutFromFirebase,
+  getCurrentFirebaseUser,
+  syncUserDataToLocal,
+  updateUserDataInFirestore,
+  updateUserProfile,
+  updateProgress,
+  enrollStudentInCourse,
+  getEnrolledCoursesWithProgress,
+  getStudentById,
+  getCourses,
+  getCourseByKey,
+  saveCourse,
+  updateCourse,
+  deleteCourse,
+  getLessons,
+  saveLesson,
+  updateLesson,
+  deleteLesson,
+  purchaseLesson,
+  canAccessLesson,
+  getTeacherWhatsAppUrl,
+  getTeacherWallet,
+  updateTeacherWallet,
+  addTeacherEarnings,
+  withdrawFromWallet,
+  getTeacherPaymentStats,
+  addMultimediaToLesson,
+  deleteMultimediaFromLesson,
+  addQuizToLesson,
+  saveQuizResult,
+  generateCertificate,
+  verifyCertificate,
+  processLessonPayment,
+  uploadFile,
+  uploadFileWithProgress,
+  getFileUrl,
+  deleteFile,
+  getPlatformStats,
+  subscribeToUser,
+  subscribeToCourse
+};
