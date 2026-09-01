@@ -16,25 +16,55 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [touchedFields, setTouchedFields] = useState({});
 
-  // Calculate password strength
+  // Calculate password strength with more criteria
   const calculatePasswordStrength = (password) => {
     let strength = 0;
-    if (password.length >= 8) strength++;
-    if (password.match(/[a-z]/) && password.match(/[A-Z]/)) strength++;
-    if (password.match(/\d/)) strength++;
-    if (password.match(/[^a-zA-Z\d]/)) strength++;
-    return strength;
+    let criteria = [];
+    
+    // Length check
+    if (password.length >= 8) {
+      strength++;
+      criteria.push('length');
+    }
+    
+    // Uppercase and lowercase
+    if (password.match(/[a-z]/) && password.match(/[A-Z]/)) {
+      strength++;
+      criteria.push('case');
+    }
+    
+    // Numbers
+    if (password.match(/\d/)) {
+      strength++;
+      criteria.push('number');
+    }
+    
+    // Special characters
+    if (password.match(/[^a-zA-Z\d]/)) {
+      strength++;
+      criteria.push('special');
+    }
+    
+    // Additional length bonus
+    if (password.length >= 12) {
+      strength = Math.min(strength + 1, 5);
+      criteria.push('long');
+    }
+    
+    return { strength, criteria };
   };
 
-  const getStrengthInfo = () => {
-    const strength = passwordStrength;
-    if (strength === 0) return { label: 'Very Weak', color: '#ef4444', emoji: '🔴' };
-    if (strength === 1) return { label: 'Weak', color: '#ef4444', emoji: '🟠' };
-    if (strength === 2) return { label: 'Fair', color: '#f59e0b', emoji: '🟡' };
-    if (strength === 3) return { label: 'Good', color: '#10b981', emoji: '🟢' };
-    if (strength >= 4) return { label: 'Strong', color: '#10b981', emoji: '💪' };
-    return { label: '', color: '#d1d5db', emoji: '⚪' };
+  const getStrengthInfo = (strength) => {
+    const levels = [
+      { label: 'Very Weak', color: '#ef4444', emoji: '🔴', description: 'Too short or too common' },
+      { label: 'Weak', color: '#f59e0b', emoji: '🟠', description: 'Add more variety' },
+      { label: 'Fair', color: '#f59e0b', emoji: '🟡', description: 'Could be stronger' },
+      { label: 'Good', color: '#10b981', emoji: '🟢', description: 'Strong password' },
+      { label: 'Excellent', color: '#10b981', emoji: '💪', description: 'Very secure password' }
+    ];
+    return levels[Math.min(strength, 4)];
   };
 
   const handleSubmit = async (e) => {
@@ -95,6 +125,7 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
         role: 'student'
       });
       setPasswordStrength(0);
+      setTouchedFields({});
     } catch (error) {
       console.error('Registration error:', error);
       setError(error.message || 'Registration failed. Please try again.');
@@ -106,7 +137,7 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
+
     setFormData({
       ...formData,
       [name]: newValue
@@ -114,11 +145,20 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
 
     // Update password strength
     if (name === 'password') {
-      setPasswordStrength(calculatePasswordStrength(value));
+      const { strength } = calculatePasswordStrength(value);
+      setPasswordStrength(strength);
     }
 
     // Clear errors on change
     if (error) setError('');
+    if (success) setSuccess('');
+  };
+
+  const handleBlur = (field) => {
+    setTouchedFields({
+      ...touchedFields,
+      [field]: true
+    });
   };
 
   const handleTogglePassword = () => {
@@ -141,7 +181,30 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
     );
   };
 
-  const strengthInfo = getStrengthInfo();
+  const getPasswordRequirements = () => {
+    const password = formData.password;
+    return [
+      { 
+        met: password.length >= 8, 
+        text: 'At least 8 characters' 
+      },
+      { 
+        met: /[a-z]/.test(password) && /[A-Z]/.test(password), 
+        text: 'Uppercase and lowercase letters' 
+      },
+      { 
+        met: /\d/.test(password), 
+        text: 'At least one number' 
+      },
+      { 
+        met: /[^a-zA-Z\d]/.test(password), 
+        text: 'At least one special character' 
+      }
+    ];
+  };
+
+  const strengthInfo = getStrengthInfo(passwordStrength);
+  const passwordRequirements = getPasswordRequirements();
 
   return (
     <div className="auth-form">
@@ -168,7 +231,7 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
           <button className="message-close" onClick={() => setSuccess('')}>×</button>
         </div>
       )}
-      
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="name">Full Name *</label>
@@ -178,11 +241,16 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
             name="name"
             value={formData.name}
             onChange={handleChange}
+            onBlur={() => handleBlur('name')}
             required
             disabled={isLoading}
             placeholder="Enter your full name"
             autoComplete="name"
+            className={touchedFields.name && !formData.name.trim() ? 'invalid' : ''}
           />
+          {touchedFields.name && !formData.name.trim() && (
+            <small className="input-error">Please enter your full name</small>
+          )}
         </div>
 
         <div className="form-group">
@@ -193,14 +261,19 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
             name="email"
             value={formData.email}
             onChange={handleChange}
+            onBlur={() => handleBlur('email')}
             required
             disabled={isLoading}
             placeholder="Enter your email address"
             autoComplete="email"
+            className={touchedFields.email && !formData.email.trim() ? 'invalid' : ''}
           />
           <small className="input-help">
             📧 We'll send a confirmation link to this email
           </small>
+          {touchedFields.email && formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email) && (
+            <small className="input-error">Please enter a valid email address</small>
+          )}
         </div>
 
         <div className="form-group">
@@ -212,12 +285,16 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
               name="password"
               value={formData.password}
               onChange={handleChange}
+              onBlur={() => handleBlur('password')}
               required
               disabled={isLoading}
               placeholder="Create a password (min. 8 characters)"
               minLength="8"
               autoComplete="new-password"
-              className={formData.password ? (passwordStrength >= 3 ? 'valid' : '') : ''}
+              className={
+                formData.password && passwordStrength >= 3 ? 'valid' :
+                formData.password && passwordStrength < 3 ? 'invalid' : ''
+              }
             />
             <button
               type="button"
@@ -229,13 +306,14 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
-          
+
+          {/* Password Strength Indicator */}
           {formData.password && (
             <div className="password-strength-container">
               <div className="password-strength">
                 <div 
-                  className="password-strength-bar active" 
-                  style={{ backgroundColor: strengthInfo.color }}
+                  className={`password-strength-bar ${passwordStrength >= 1 ? 'active' : ''}`}
+                  style={{ backgroundColor: passwordStrength >= 1 ? strengthInfo.color : '' }}
                 ></div>
                 <div 
                   className={`password-strength-bar ${passwordStrength >= 2 ? 'active' : ''}`}
@@ -249,16 +327,33 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
                   className={`password-strength-bar ${passwordStrength >= 4 ? 'active' : ''}`}
                   style={{ backgroundColor: passwordStrength >= 4 ? strengthInfo.color : '' }}
                 ></div>
+                <div 
+                  className={`password-strength-bar ${passwordStrength >= 5 ? 'active' : ''}`}
+                  style={{ backgroundColor: passwordStrength >= 5 ? strengthInfo.color : '' }}
+                ></div>
               </div>
-              <span className="password-strength-label" style={{ color: strengthInfo.color }}>
-                {strengthInfo.emoji} {strengthInfo.label}
-              </span>
+              <div className="password-strength-info">
+                <span className="password-strength-label" style={{ color: strengthInfo.color }}>
+                  {strengthInfo.emoji} {strengthInfo.label}
+                </span>
+                <span className="password-strength-description">
+                  {strengthInfo.description}
+                </span>
+              </div>
             </div>
           )}
-          
-          <small className="input-help">
-            Use at least 8 characters with uppercase, lowercase, and numbers
-          </small>
+
+          {/* Password Requirements List */}
+          <div className="password-requirements">
+            <small className="input-help">Password requirements:</small>
+            <ul>
+              {passwordRequirements.map((req, index) => (
+                <li key={index} className={req.met ? 'met' : ''}>
+                  {req.met ? '✅' : '⬜'} {req.text}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <div className="form-group">
@@ -270,6 +365,7 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
+              onBlur={() => handleBlur('confirmPassword')}
               required
               disabled={isLoading}
               placeholder="Confirm your password"
@@ -290,7 +386,7 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
               {showConfirmPassword ? '🙈' : '👁️'}
             </button>
           </div>
-          
+
           {formData.confirmPassword && (
             <div className="password-match-indicator">
               {formData.password === formData.confirmPassword ? (
@@ -312,8 +408,8 @@ const RegisterForm = ({ onRegister, onSwitchToLogin, isRegistering }) => {
               disabled={isLoading}
             />
             <span className="checkbox-text">
-              I agree to the <a href="/terms" target="_blank">Terms and Conditions</a> and 
-              <a href="/privacy" target="_blank"> Privacy Policy</a> *
+              I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a> and 
+              <a href="/privacy" target="_blank" rel="noopener noreferrer"> Privacy Policy</a> *
             </span>
           </label>
         </div>
